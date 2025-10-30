@@ -1,6 +1,7 @@
 package expo.modules.vlcplayer
 
 import android.R
+import android.app.Activity
 import android.app.PendingIntent
 import android.app.PendingIntent.FLAG_IMMUTABLE
 import android.app.PendingIntent.FLAG_UPDATE_CURRENT
@@ -19,6 +20,7 @@ import android.os.Looper
 import androidx.annotation.RequiresApi
 import androidx.core.app.PictureInPictureModeChangedInfo
 import androidx.lifecycle.LifecycleObserver
+import expo.modules.core.interfaces.ReactActivityLifecycleListener
 import expo.modules.core.logging.LogHandlers
 import expo.modules.core.logging.Logger
 import expo.modules.kotlin.AppContext
@@ -32,7 +34,7 @@ import org.videolan.libvlc.util.VLCVideoLayout
 
 
 class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context, appContext), LifecycleObserver,
-  MediaPlayer.EventListener {
+  MediaPlayer.EventListener, ReactActivityLifecycleListener {
   private val log = Logger(listOf(LogHandlers.createOSLogHandler(this::class.simpleName!!)))
   private val PIP_PLAY_PAUSE_ACTION = "PIP_PLAY_PAUSE_ACTION"
   private val PIP_REWIND_ACTION = "PIP_REWIND_ACTION"
@@ -113,7 +115,9 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   }
 
   init {
+    VLCManager.listeners.add(this)
     setupView()
+    setupPiP()
   }
 
   private fun setupView() {
@@ -128,8 +132,7 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   }
 
   private fun setupPiP() {
-    if (Build.VERSION.SDK_INT < Build.VERSION_CODES.O) return
-    try {
+    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
       remoteActionFilter.addAction(PIP_PLAY_PAUSE_ACTION)
       remoteActionFilter.addAction(PIP_FORWARD_ACTION)
       remoteActionFilter.addAction(PIP_REWIND_ACTION)
@@ -145,18 +148,6 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
         setPictureInPictureParams(getPipParams()!!)
         addOnPictureInPictureModeChangedListener(pipChangeListener)
       }
-    } catch (e: IllegalStateException) {
-      log.warn("Deferred PiP setup: activity not available yet")
-    }
-  }
-
-  private var pipInitialized: Boolean = false
-
-  override fun onAttachedToWindow() {
-    super.onAttachedToWindow()
-    if (!pipInitialized) {
-      setupPiP()
-      pipInitialized = true
     }
   }
 
@@ -219,13 +210,18 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   fun setSource(source: Map<String, Any>) {
     log.debug("setting source $source")
     if (hasSource) {
-      log.debug("Source already set. Resuming")
-      val isAttached = mediaPlayer?.vlcVout?.areViewsAttached()
-      if (isAttached == false) {
-        mediaPlayer?.attachViews(videoLayout, null, false, false)
-      }
-      play()
-      return
+      log.debug("Source already set. Cleaning up and resetting")
+      // Detach views before resetting
+      mediaPlayer?.detachViews()
+      mediaPlayer?.stop()
+      media?.release()
+      mediaPlayer?.release()
+      libVLC?.release()
+      mediaPlayer = null
+      media = null
+      libVLC = null
+      hasSource = false
+      isMediaReady = false
     }
     val mediaOptions = source["mediaOptions"] as? Map<String, Any> ?: emptyMap()
     val autoplay = source["autoplay"] as? Boolean ?: false
@@ -245,10 +241,7 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
 
     libVLC = LibVLC(context, initOptions)
     mediaPlayer = MediaPlayer(libVLC)
-    val initiallyAttached = mediaPlayer?.vlcVout?.areViewsAttached()
-    if (initiallyAttached == false) {
-      mediaPlayer?.attachViews(videoLayout, null, false, false)
-    }
+    mediaPlayer?.attachViews(videoLayout, null, false, false)
     mediaPlayer?.setEventListener(this)
 
     log.debug("Loading network file: $uri")
@@ -429,6 +422,7 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
       currentActivity.unregisterReceiver(actionReceiver)
     }
     currentActivity.removeOnPictureInPictureModeChangedListener(pipChangeListener)
+    VLCManager.listeners.clear()
 
     mediaPlayer?.stop()
     handler.removeCallbacks(updateStatsRunnable) // Stop updating stats
@@ -524,7 +518,15 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     }
   }
 
-  // Expo New Architecture: rely on view lifecycle instead of ReactActivityLifecycleListener
+  override fun onPause(activity: Activity?) {
+    log.debug("Pausing activity...")
+  }
+
+
+  override fun onResume(activity: Activity?) {
+    log.debug("Resuming activity...")
+    if (isPaused) play()
+  }
 }
 
 internal fun Context.findActivity(): androidx.activity.ComponentActivity {
