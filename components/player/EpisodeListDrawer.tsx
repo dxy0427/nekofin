@@ -12,6 +12,12 @@ import {
   View,
 } from 'react-native';
 import { Drawer } from 'react-native-drawer-layout';
+import Animated, {
+  useAnimatedStyle,
+  useSharedValue,
+  withDelay,
+  withTiming,
+} from 'react-native-reanimated';
 
 import { EpisodeCard } from '../media/Card';
 import { usePlayer } from './PlayerContext';
@@ -24,6 +30,7 @@ export interface EpisodeListDrawerRef {
 export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDrawerRef | null> }) {
   const { episodes, currentItem, onEpisodeSelect } = usePlayer();
   const [open, setOpen] = useState(false);
+  const opacity = useSharedValue(0);
   const subtitleColor = useThemeColor({ light: '#666', dark: '#999' }, 'text');
   const { width: screenWidth } = useWindowDimensions();
   const flatListRef = useRef<FlatList>(null);
@@ -40,6 +47,14 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
     present,
     dismiss,
   }));
+
+  useEffect(() => {
+    if (open) {
+      opacity.value = withTiming(1, { duration: 0 });
+    } else {
+      opacity.value = withDelay(350, withTiming(0, { duration: 0 }));
+    }
+  }, [open, opacity]);
 
   useEffect(() => {
     if (open && currentItem && episodes.length > 0) {
@@ -109,9 +124,13 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
     [currentItem?.id, handleEpisodePress, subtitleColor],
   );
 
+  const animatedStyle = useAnimatedStyle(() => ({
+    opacity: opacity.value,
+  }));
+
   return (
-    <View
-      style={[StyleSheet.absoluteFill, styles.container, { opacity: open ? 100 : 0 }]}
+    <Animated.View
+      style={[StyleSheet.absoluteFill, styles.container, animatedStyle]}
       pointerEvents={open ? 'box-none' : 'none'}
     >
       <Drawer
@@ -149,7 +168,7 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
       >
         <View style={{ flex: 1 }} pointerEvents="none" />
       </Drawer>
-    </View>
+    </Animated.View>
   );
 }
 

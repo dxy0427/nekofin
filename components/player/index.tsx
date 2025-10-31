@@ -273,6 +273,8 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   }, [isPlaying]);
 
   useEffect(() => {
+    if (!player.current) return;
+
     (async () => {
       try {
         const audioTracks = await player.current?.getAudioTracks();
