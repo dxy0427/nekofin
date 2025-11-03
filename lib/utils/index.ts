@@ -106,13 +106,36 @@ export function isNil(value: unknown): value is null | undefined {
 
 export const sleep = (ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms));
 
-export const formatBitrate = (mbps: number): string => {
-  const KBps = (mbps * 1000) / 8; // KB/s
-  const MBps = mbps / 8; // MB/s
+export const formatBitrate = (
+  bps: number | null | undefined,
+  options?: { unit?: 'bits' | 'bytes' },
+): string => {
+  if (!bps || bps <= 0) return '未知';
 
-  if (MBps >= 1) {
-    return `${MBps.toFixed(2)} MB/s`;
+  // 输入是 bps (bits per second)
+  const useBytes = options?.unit === 'bytes';
+
+  if (useBytes) {
+    // 显示为字节单位 (MB/s, KB/s)
+    const MBps = bps / 8 / 1000000; // bps -> MB/s
+    const KBps = bps / 8 / 1000; // bps -> KB/s
+
+    if (MBps >= 1) {
+      return `${MBps.toFixed(2)} MB/s`;
+    } else {
+      return `${KBps.toFixed(2)} KB/s`;
+    }
   } else {
-    return `${KBps.toFixed(2)} KB/s`;
+    // 显示为比特单位 (Mbps, Kbps)
+    const mbps = bps / 1000000; // 转换为 Mbps
+    const kbps = bps / 1000; // 转换为 Kbps
+
+    if (mbps >= 1) {
+      return `${mbps.toFixed(1)} Mbps`;
+    } else if (kbps >= 1) {
+      return `${kbps.toFixed(0)} Kbps`;
+    } else {
+      return `${bps.toFixed(0)} bps`;
+    }
   }
 };

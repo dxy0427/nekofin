@@ -16,7 +16,7 @@ import { ThemedText } from '../ThemedText';
 export const PlayButton = ({ item }: { item: MediaItem }) => {
   const router = useRouter();
   const { accentColor } = useAccentColor();
-  const textColor = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
+  const textColor = useThemeColor({ light: '#fff', dark: '#fff' }, 'text');
 
   const progressPercent = useMemo(() => {
     const pct = item.userData?.playedPercentage ?? (item.userData?.played ? 100 : 0);

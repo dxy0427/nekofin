@@ -364,10 +364,6 @@ export const EpisodeModeContent = ({
               style={{
                 flexDirection: 'row',
                 alignItems: 'center',
-                paddingHorizontal: 12,
-                paddingVertical: 8,
-                backgroundColor: 'rgba(255, 255, 255, 0.1)',
-                borderRadius: 8,
                 gap: 6,
               }}
             >
@@ -476,7 +472,6 @@ const styles = StyleSheet.create({
   sourceCardContainer: {
     flexDirection: 'row',
     gap: 12,
-    marginRight: 12,
   },
   infoCard: {
     width: 240,

@@ -110,7 +110,7 @@ export function TopControls() {
           )}
           {!!mediaStats?.inputBitrate && mediaStats.inputBitrate > 0 && (
             <Text style={[styles.textShadow, styles.netSpeedText]}>
-              {formatBitrate(mediaStats.inputBitrate)}
+              {formatBitrate(mediaStats.inputBitrate, { unit: 'bytes' })}
             </Text>
           )}
         </View>
