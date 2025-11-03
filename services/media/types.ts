@@ -114,6 +114,22 @@ export interface MediaStream {
   width?: number | null;
   height?: number | null;
   bitRate?: number | null;
+  // Video specific
+  averageFrameRate?: number | null;
+  realFrameRate?: number | null;
+  profile?: string | null;
+  level?: number | null;
+  pixelFormat?: string | null;
+  bitDepth?: number | null;
+  isInterlaced?: boolean | null;
+  aspectRatio?: string | null;
+  videoRange?: string | null;
+  // Audio specific
+  channels?: number | null;
+  channelLayout?: string | null;
+  sampleRate?: number | null;
+  audioProfile?: string | null;
+  title?: string | null;
 }
 
 export interface MediaStreamInfo {

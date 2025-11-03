@@ -356,6 +356,21 @@ class JellyfinAdapter implements MediaAdapter {
               width: stream.Width,
               height: stream.Height,
               bitRate: stream.BitRate,
+              // Video specific
+              averageFrameRate: stream.AverageFrameRate,
+              realFrameRate: stream.RealFrameRate,
+              profile: stream.Profile,
+              level: stream.Level,
+              pixelFormat: stream.PixelFormat,
+              bitDepth: stream.BitDepth,
+              isInterlaced: stream.IsInterlaced,
+              aspectRatio: stream.AspectRatio,
+              videoRange: stream.VideoRange,
+              // Audio specific
+              channels: stream.Channels,
+              channelLayout: stream.ChannelLayout,
+              sampleRate: stream.SampleRate,
+              title: stream.Title,
             })) || [],
         })) || [],
     };

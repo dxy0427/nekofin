@@ -39,6 +39,21 @@ export type EmbyPlaybackInfoMediaStream = {
   Width?: number;
   Height?: number;
   BitRate?: number;
+  // Video specific
+  AverageFrameRate?: number;
+  RealFrameRate?: number;
+  Profile?: string;
+  Level?: number;
+  PixelFormat?: string;
+  BitDepth?: number;
+  IsInterlaced?: boolean;
+  AspectRatio?: string;
+  VideoRange?: string;
+  // Audio specific
+  Channels?: number;
+  ChannelLayout?: string;
+  SampleRate?: number;
+  Title?: string;
 };
 
 export type EmbyPlaybackInfoMediaSource = {
