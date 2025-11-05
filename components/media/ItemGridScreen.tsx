@@ -30,21 +30,25 @@ import { SkeletonItemGrid } from '../ui/Skeleton';
 
 export type ItemGridScreenProps = {
   title: string;
-  query: UseInfiniteQueryResult<
+  query?: UseInfiniteQueryResult<
     InfiniteData<MediaItem[] | { items: MediaItem[]; total: number }, unknown>,
     unknown
   >;
+  data?: MediaItem[];
   type?: 'series' | 'episode';
   filters?: MediaFilters;
   onChangeFilters?: (next: MediaFilters) => void;
+  disableGrouping?: boolean;
 };
 
 export function ItemGridScreen({
   title,
   query,
+  data: dataProp,
   type,
   filters,
   onChangeFilters,
+  disableGrouping = false,
 }: ItemGridScreenProps) {
   const insets = useSafeAreaInsets();
   const backgroundColor = useThemeColor({ light: '#fff', dark: '#000' }, 'background');
@@ -57,29 +61,52 @@ export function ItemGridScreen({
   const { currentServer } = useMediaServers();
   const mediaAdapter = useMediaAdapter();
 
-  const { data, isLoading, isError, refetch, fetchNextPage, hasNextPage, isFetchingNextPage } =
-    query;
+  const queryData = query ? query.data : undefined;
+  const isLoading = query ? query.isLoading : false;
+  const isError = query ? query.isError : false;
+  const refetch = query ? query.refetch : undefined;
+  const fetchNextPage = query ? query.fetchNextPage : undefined;
+  const hasNextPage = query ? query.hasNextPage : false;
+  const isFetchingNextPage = query ? query.isFetchingNextPage : false;
 
   const useThreeCols = type === 'series';
 
   const items = useMemo(() => {
-    const pages = data?.pages ?? [];
-    const merged: MediaItem[] = [];
-    const seen = new Set<string | undefined>();
-    for (const page of pages) {
-      const list = Array.isArray(page) ? page : page.items;
-      for (const it of list) {
+    if (dataProp) {
+      const merged: MediaItem[] = [];
+      const seen = new Set<string | undefined>();
+      for (const it of dataProp) {
         const id = it.id;
         if (id && !seen.has(id)) {
           merged.push(it);
           seen.add(id);
         }
       }
+      return merged;
     }
-    return merged;
-  }, [data]);
+    if (queryData) {
+      const pages = queryData.pages ?? [];
+      const merged: MediaItem[] = [];
+      const seen = new Set<string | undefined>();
+      for (const page of pages) {
+        const list = Array.isArray(page) ? page : page.items;
+        for (const it of list) {
+          const id = it.id;
+          if (id && !seen.has(id)) {
+            merged.push(it);
+            seen.add(id);
+          }
+        }
+      }
+      return merged;
+    }
+    return [];
+  }, [dataProp, queryData]);
 
   const groupedItems = useMemo(() => {
+    if (disableGrouping) {
+      return [{ key: 'all', title: '', items }];
+    }
     const typeToItems: Record<string, MediaItem[]> = {};
     items.forEach((item) => {
       const key = item.type || 'Other';
@@ -101,9 +128,9 @@ export function ItemGridScreen({
         (order.indexOf(b[0]) === -1 ? 999 : order.indexOf(b[0])),
     );
     return entries.map(([type, items]) => ({ key: type, title: titleMap[type] || type, items }));
-  }, [items]);
+  }, [items, disableGrouping]);
 
-  const { refreshing, onRefresh } = useRefresh(refetch);
+  const { refreshing, onRefresh } = useRefresh(refetch || (async () => {}));
 
   const { data: availableFilters } = useQuery({
     enabled: !!currentServer && !!onChangeFilters,
@@ -132,14 +159,18 @@ export function ItemGridScreen({
     [itemWidth, useThreeCols],
   );
 
-  const keyExtractor = useCallback((item: MediaItem) => item.id!, []);
+  const keyExtractor = useCallback(
+    (item: MediaItem, index: number) => item.id || `item-${index}`,
+    [],
+  );
 
   const handleEndReached = useCallback(async () => {
-    if (!hasNextPage || isFetchingNextPage) return;
+    if (!query || !hasNextPage || isFetchingNextPage || !fetchNextPage) return;
     await fetchNextPage();
-  }, [hasNextPage, isFetchingNextPage, fetchNextPage]);
+  }, [query, hasNextPage, isFetchingNextPage, fetchNextPage]);
 
   const listFooter = useMemo(() => {
+    if (!query) return <View style={{ height: 16 }} />;
     if (isFetchingNextPage) {
       return (
         <View style={styles.footerLoadingContainer}>
@@ -149,7 +180,7 @@ export function ItemGridScreen({
     }
     if (!hasNextPage) return <View style={{ height: 16 }} />;
     return <View style={{ height: 16 }} />;
-  }, [isFetchingNextPage, hasNextPage, accentColor]);
+  }, [query, isFetchingNextPage, hasNextPage, accentColor]);
 
   useEffect(() => {
     navigation.setOptions({ title });
@@ -350,7 +381,7 @@ export function ItemGridScreen({
     [episodeLayout.itemWidth, itemWidth, textColor, keyExtractor, handleEndReached, useThreeCols],
   );
 
-  if (isLoading) {
+  if (query && isLoading) {
     return (
       <PageScrollView style={[styles.container, { backgroundColor }]}>
         <SkeletonItemGrid type={type} numColumns={numColumns} itemWidth={itemWidth} gap={gap} />
@@ -358,7 +389,7 @@ export function ItemGridScreen({
     );
   }
 
-  if (isError) {
+  if (query && isError) {
     return (
       <View style={[styles.container, { backgroundColor, paddingTop: insets.top }]}>
         <View style={styles.errorContainer}>
@@ -366,7 +397,7 @@ export function ItemGridScreen({
           <TouchableOpacity
             style={[styles.retryButton, { backgroundColor: accentColor }]}
             onPress={() => {
-              refetch();
+              refetch?.();
             }}
           >
             <Text style={styles.retryButtonText}>重试</Text>

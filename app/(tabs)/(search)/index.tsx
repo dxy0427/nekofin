@@ -1,4 +1,5 @@
 import { EpisodeCard, SeriesCard } from '@/components/media/Card';
+import { ItemGridScreen } from '@/components/media/ItemGridScreen';
 import PageScrollView from '@/components/PageScrollView';
 import { SkeletonHorizontalSection } from '@/components/ui/Skeleton';
 import { useMediaAdapter } from '@/hooks/useMediaAdapter';
@@ -7,9 +8,16 @@ import { useMediaServers } from '@/lib/contexts/MediaServerContext';
 import { useAccentColor } from '@/lib/contexts/ThemeColorContext';
 import { MediaItem } from '@/services/media/types';
 import { useQuery } from '@tanstack/react-query';
-import { Stack } from 'expo-router';
-import React, { RefObject, useMemo, useRef, useState } from 'react';
-import { FlatList, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
+import { useNavigation } from 'expo-router';
+import React, { RefObject, useEffect, useMemo, useRef, useState } from 'react';
+import {
+  FlatList,
+  StyleSheet,
+  Text,
+  TextInputChangeEvent,
+  TouchableOpacity,
+  View,
+} from 'react-native';
 import { SearchBarCommands } from 'react-native-screens';
 
 export default function SearchScreen() {
@@ -22,16 +30,18 @@ export default function SearchScreen() {
   const textColor = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
   const { accentColor } = useAccentColor();
 
+  const navigation = useNavigation();
+
   const searchBarRef = useRef<SearchBarCommands>(null);
 
   const canQuery = Boolean(currentServer?.userId);
 
-  const { data: suggestions = [] } = useQuery<string[]>({
+  const { data: recommendedData = [] } = useQuery({
     enabled: canQuery,
     queryKey: ['recommend-keywords', currentServer?.id],
     queryFn: async () => {
       if (!currentServer?.userId) return [];
-      return await mediaAdapter.getRecommendedSearchKeywords({
+      return await mediaAdapter.getRandomItems({
         userId: currentServer.userId,
         limit: 20,
       });
@@ -94,55 +104,37 @@ export default function SearchScreen() {
     return <EpisodeCard item={item} />;
   };
 
+  useEffect(() => {
+    navigation.setOptions({
+      headerSearchBarOptions: {
+        ref: searchBarRef as RefObject<SearchBarCommands>,
+        placeholder: '搜索影片、剧集...',
+        onChangeText: (t: TextInputChangeEvent) => {
+          const text = t.nativeEvent.text;
+          if (text.length === 0) {
+            setSelected('');
+          }
+          setKeyword(text);
+        },
+        onCancelButtonPress: () => {
+          setKeyword('');
+          setSelected('');
+        },
+        hideWhenScrolling: false,
+        cancelButtonText: '取消',
+      },
+    });
+  }, [navigation, searchBarRef]);
+
+  if (effectiveKeyword.length === 0) {
+    return <ItemGridScreen title="推荐" data={recommendedData} type="series" disableGrouping />;
+  }
+
   return (
     <PageScrollView style={[styles.container, { backgroundColor }]}>
-      <Stack.Screen
-        options={{
-          headerSearchBarOptions: {
-            ref: searchBarRef as RefObject<SearchBarCommands>,
-            placeholder: '搜索影片、剧集...',
-            onChangeText: (t) => {
-              const text = t.nativeEvent.text;
-              if (text.length === 0) {
-                setSelected('');
-              }
-              setKeyword(text);
-            },
-            onCancelButtonPress: () => {
-              setKeyword('');
-              setSelected('');
-            },
-            hideWhenScrolling: false,
-            cancelButtonText: '取消',
-          },
-        }}
-      />
+      {loadingResults && <SkeletonHorizontalSection title="加载中" />}
 
-      {effectiveKeyword.length === 0 && suggestions.length > 0 && (
-        <View style={styles.suggestContainerCentered}>
-          <Text style={[styles.suggestText, { color: textColor, fontSize: 20 }]}>建议</Text>
-          <View style={styles.suggestColumn}>
-            {suggestions.map((s) => (
-              <TouchableOpacity
-                key={s}
-                onPress={() => {
-                  setKeyword(s);
-                  setSelected(s);
-                  searchBarRef.current?.setText(s);
-                }}
-              >
-                <Text style={[styles.suggestText, { color: accentColor }]}>{s}</Text>
-              </TouchableOpacity>
-            ))}
-          </View>
-        </View>
-      )}
-
-      {effectiveKeyword.length > 0 && loadingResults && (
-        <SkeletonHorizontalSection title="加载中" />
-      )}
-
-      {effectiveKeyword.length > 0 && groupedResults.length === 0 && !loadingResults && (
+      {groupedResults.length === 0 && !loadingResults && (
         <View style={styles.emptyContainer}>
           <Text style={styles.emptyText}>没有找到相关内容</Text>
           {isResultsError && (
@@ -156,21 +148,20 @@ export default function SearchScreen() {
         </View>
       )}
 
-      {effectiveKeyword.length > 0 &&
-        groupedResults.map((group) => (
-          <View key={group.key} style={styles.groupSection}>
-            <Text style={[styles.sectionTitle, { color: textColor }]}>{group.title}</Text>
-            <FlatList
-              data={group.items}
-              renderItem={renderItem}
-              keyExtractor={(item) => item.id!}
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.horizontalListContainer}
-              ItemSeparatorComponent={() => <View style={{ width: 16 }} />}
-            />
-          </View>
-        ))}
+      {groupedResults.map((group) => (
+        <View key={group.key} style={styles.groupSection}>
+          <Text style={[styles.sectionTitle, { color: textColor }]}>{group.title}</Text>
+          <FlatList
+            data={group.items}
+            renderItem={renderItem}
+            keyExtractor={(item) => item.id!}
+            horizontal
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.horizontalListContainer}
+            ItemSeparatorComponent={() => <View style={{ width: 16 }} />}
+          />
+        </View>
+      ))}
     </PageScrollView>
   );
 }
@@ -188,30 +179,11 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
   },
-  suggestContainerCentered: {
-    paddingHorizontal: 16,
-    paddingTop: 8,
-    paddingBottom: 4,
-    flexDirection: 'column',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 16,
-  },
   sectionTitle: {
     fontSize: 18,
     fontWeight: '600',
     marginBottom: 8,
     paddingHorizontal: 16,
-  },
-  suggestColumn: {
-    flexDirection: 'column',
-    gap: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  suggestText: {
-    fontSize: 14,
-    textAlign: 'center',
   },
   groupSection: {
     paddingTop: 8,
