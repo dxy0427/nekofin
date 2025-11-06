@@ -12,6 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       sha_short: ${{ steps.commit.outputs.sha_short }}
+      should_build: ${{ steps.check.outputs.should_build }}
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -20,9 +21,25 @@ jobs:
         id: commit
         run: echo "sha_short=$(git rev-parse --short HEAD)" >> $GITHUB_OUTPUT
 
+      - name: Check commit message
+        id: check
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+            if [[ "$COMMIT_MSG" =~ ^(ci|docs)(\(.+\))?: ]]; then
+              echo "should_build=false" >> $GITHUB_OUTPUT
+              echo "Skipping build for commit message: $COMMIT_MSG"
+            else
+              echo "should_build=true" >> $GITHUB_OUTPUT
+            fi
+          else
+            echo "should_build=true" >> $GITHUB_OUTPUT
+          fi
+
   call-build-workflow:
     name: Call Build Apps Workflow
     needs: get-commit-info
+    if: needs.get-commit-info.outputs.should_build == 'true'
     uses: ./.github/workflows/build-apps.yml
     with:
       platform: both
