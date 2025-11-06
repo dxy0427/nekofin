@@ -46,6 +46,12 @@ export default function HomeLayout() {
           headerTitle: '转码设置',
         }}
       />
+      <Stack.Screen
+        name="server-config/[serverId]"
+        options={{
+          headerTitle: '服务器配置',
+        }}
+      />
     </Stack>
   );
 }

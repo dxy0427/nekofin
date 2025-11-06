@@ -6,6 +6,7 @@ import { BaseItemDto, BaseItemKind, ImageType } from '@jellyfin/sdk/lib/generate
 import {
   applyDefaultImageAndFields,
   convertSortByToEmby,
+  createEmbyApiClient,
   EmbyApi,
   EmbyAuthenticateResponse,
   EmbyPlaybackInfoResponse,
@@ -69,13 +70,23 @@ import {
   type UpdateFavoriteItemParams,
 } from '../types';
 
-class EmbyAdapter implements MediaAdapter {
+export class EmbyAdapter implements MediaAdapter {
+  _api: EmbyApi | null = null;
+
   getApiInstance(): EmbyApi | null {
     return getApiInstance();
   }
 
   setGlobalApiInstance(api: EmbyApi | null): void {
     setGlobalApiInstance(api);
+  }
+
+  setApi(api: EmbyApi | null): void {
+    this._api = api;
+  }
+
+  getApi(): EmbyApi | null {
+    return this._api || this.getApiInstance();
   }
 
   async discoverServers({ host }: DiscoverServersParams): Promise<RecommendedServerInfo[]> {
@@ -395,7 +406,9 @@ class EmbyAdapter implements MediaAdapter {
   }
 
   async getUserView({ userId }: GetUserViewParams): Promise<MediaItem[]> {
-    const res = await getEmbyApiClient().get<{ Items?: BaseItemDto[] }>(`/Users/${userId}/Views`);
+    const api = this.getApi();
+    const client = api ? createEmbyApiClient(api) : getEmbyApiClient();
+    const res = await client.get<{ Items?: BaseItemDto[] }>(`/Users/${userId}/Views`);
     return await parseItems(res);
   }
 
@@ -547,12 +560,18 @@ class EmbyAdapter implements MediaAdapter {
   }
 
   async getRandomItems({ userId, limit }: GetRandomItemsParams): Promise<MediaItem[]> {
+    const baseParams = new URLSearchParams();
+    applyDefaultImageAndFields(
+      baseParams,
+      'BasicSyncInfo,CanDelete,PrimaryImageAspectRatio,ProductionYear,Status,EndDate,Path,ParentId',
+    );
     const res = await getEmbyApiClient().get<{ Items?: BaseItemDto[] }>(`/Users/${userId}/Items`, {
       UserId: userId,
       Recursive: true,
       IncludeItemTypes: 'Movie,Series',
       SortBy: 'Random',
       Limit: limit,
+      ...Object.fromEntries(baseParams.entries()),
     });
     return await parseItems(res);
   }

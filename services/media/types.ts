@@ -284,8 +284,18 @@ export interface ReportPlaybackStopParams {
 }
 
 export abstract class MediaAdapter {
+  _api: MediaApi | null = null;
+
   abstract getApiInstance(): MediaApi | null;
   abstract setGlobalApiInstance(api: MediaApi | null): void;
+
+  setApi(api: MediaApi | null): void {
+    this._api = api;
+  }
+
+  getApi(): MediaApi | null {
+    return this._api || this.getApiInstance();
+  }
 
   abstract discoverServers(params: DiscoverServersParams): Promise<RecommendedServerInfo[]>;
   abstract findBestServer(params: FindBestServerParams): RecommendedServerInfo | null;

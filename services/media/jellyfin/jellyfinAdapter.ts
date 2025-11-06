@@ -137,9 +137,19 @@ function convertItemTypesToJellyfin(itemTypes: MediaItemType[]): BaseItemKind[] 
   return itemTypes.map((it) => it as BaseItemKind);
 }
 
-class JellyfinAdapter implements MediaAdapter {
+export class JellyfinAdapter implements MediaAdapter {
+  _api: Api | null = null;
+
   getApiInstance = getApiInstance;
   setGlobalApiInstance = setGlobalApiInstance;
+
+  setApi(api: Api | null): void {
+    this._api = api;
+  }
+
+  getApi(): Api | null {
+    return this._api || this.getApiInstance();
+  }
 
   async discoverServers({ host }: DiscoverServersParams) {
     const jf = getJellyfinInstance();
@@ -377,7 +387,7 @@ class JellyfinAdapter implements MediaAdapter {
   }
 
   async getUserView({ userId }: GetUserViewParams) {
-    const api = getApiInstance();
+    const api = this.getApi();
     if (!api) throw new Error('API instance is not set');
     const result = await getUserView(api, userId);
     return result.data?.Items?.map(convertBaseItemDtoToMediaItem) || [];

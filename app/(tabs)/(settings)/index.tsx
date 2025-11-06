@@ -34,11 +34,7 @@ export default function SettingsScreen() {
       </Section>
 
       <Section title="播放">
-        <SettingItem
-          title="转码设置"
-          icon="settings"
-          onPress={() => router.push('./transcoding')}
-        />
+        <SettingItem title="转码设置" icon="settings" onPress={() => router.push('/transcoding')} />
         <SettingItem
           title="弹幕设置"
           icon="chatbubble-ellipses"

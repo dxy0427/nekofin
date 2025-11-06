@@ -11,12 +11,14 @@ import { useMediaAdapter } from '@/hooks/useMediaAdapter';
 import { useQueryWithFocus } from '@/hooks/useQueryWithFocus';
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { useMediaServers } from '@/lib/contexts/MediaServerContext';
+import { getHiddenUserViews } from '@/lib/utils/userViewConfig';
 import { MediaItem, MediaServerInfo } from '@/services/media/types';
 import { MenuAction, MenuView } from '@react-native-menu/menu';
 import { useIsFocused } from '@react-navigation/native';
 import { useQueries } from '@tanstack/react-query';
 import { Image } from 'expo-image';
 import {
+  useFocusEffect,
   useNavigation,
   useNavigationContainerRef,
   useRootNavigationState,
@@ -49,6 +51,19 @@ function useHomeSections(currentServer: MediaServerInfo | null) {
   const mediaAdapter = useMediaAdapter();
   const enabled = !!currentServer?.id && !!currentServer?.userId;
 
+  const [hiddenUserViewIds, setHiddenUserViewIds] = useState<string[]>(() =>
+    currentServer?.id ? getHiddenUserViews(currentServer.id) : [],
+  );
+
+  useFocusEffect(
+    useCallback(() => {
+      if (currentServer?.id) {
+        setHiddenUserViewIds(getHiddenUserViews(currentServer.id));
+        console.log('hiddenUserViewIds', getHiddenUserViews(currentServer.id));
+      }
+    }, [currentServer?.id]),
+  );
+
   const resumeQuery = useQueryWithFocus<MediaItem[]>({
     refetchOnScreenFocus: true,
     queryKey: ['homeSections', currentServer?.id, 'resume'],
@@ -77,9 +92,9 @@ function useHomeSections(currentServer: MediaServerInfo | null) {
     enabled,
   });
 
-  const userViewQuery = useQueryWithFocus<MediaItem[]>({
+  const allUserViewQuery = useQueryWithFocus<MediaItem[]>({
     refetchOnScreenFocus: true,
-    queryKey: ['homeSections', currentServer?.id, 'userview'],
+    queryKey: ['homeSections', currentServer?.id, 'allUserView'],
     queryFn: async () => {
       if (!currentServer) return [];
       const userView = await mediaAdapter.getUserView({ userId: currentServer.userId });
@@ -88,16 +103,25 @@ function useHomeSections(currentServer: MediaServerInfo | null) {
     enabled,
   });
 
+  const userViewQuery = useMemo(() => {
+    if (!allUserViewQuery.data) return { ...allUserViewQuery, data: [] };
+    return {
+      ...allUserViewQuery,
+      data: allUserViewQuery.data.filter((item) => item.id && !hiddenUserViewIds.includes(item.id)),
+    };
+  }, [allUserViewQuery, hiddenUserViewIds]);
+
   const latestFolders = useMemo(() => {
     if (!userViewQuery.data) return [];
 
     return userViewQuery.data
       .filter((item): item is MediaItem & { id: string } => !!item.id)
+      .filter((item) => !hiddenUserViewIds.includes(item.id))
       .map((item) => ({
         folderId: item.id!,
         name: item.name || '',
       }));
-  }, [userViewQuery.data]);
+  }, [userViewQuery.data, hiddenUserViewIds]);
 
   const latestQueries = useQueries({
     queries: latestFolders.map((folder) => ({

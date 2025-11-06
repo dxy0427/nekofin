@@ -6,15 +6,16 @@ import { ThemedText } from '@/components/ThemedText';
 import { Section } from '@/components/ui/Section';
 import { SelectSetting } from '@/components/ui/SelectSetting';
 import { SettingsRow } from '@/components/ui/SettingsRow';
-import { useSettingsColors } from '@/hooks/useSettingsColors';
 import { useMediaServers } from '@/lib/contexts/MediaServerContext';
 import { MediaServerInfo } from '@/services/media/types';
 import { BottomSheetModal } from '@gorhom/bottom-sheet';
+import { useRouter } from 'expo-router';
 import { useRef, useState } from 'react';
 import { StyleSheet, View } from 'react-native';
 
 export default function MediaScreen() {
   const { servers, removeServer, setCurrentServer, currentServer } = useMediaServers();
+  const router = useRouter();
 
   const bottomSheetRef = useRef<BottomSheetModal>(null);
   const [isAddServerVisible, setIsAddServerVisible] = useState(false);
@@ -73,6 +74,15 @@ export default function MediaScreen() {
           ) : undefined
         }
         customActions={[
+          {
+            id: 'config',
+            title: '配置',
+            onPress: () =>
+              router.push({
+                pathname: '/server-config/[serverId]',
+                params: { serverId: server.id },
+              }),
+          },
           {
             id: 'remove',
             title: '删除服务器',

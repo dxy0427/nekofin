@@ -457,6 +457,7 @@ export async function getRandomItems(
     recursive: true,
     includeItemTypes: ['Movie', 'Series'],
     sortBy: ['Random'],
+    fields: ['ParentId'],
     imageTypeLimit: 0,
     enableTotalRecordCount: false,
     enableImages: false,

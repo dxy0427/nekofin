@@ -165,6 +165,45 @@ export function getEmbyApiClient(): ApiClient {
   return ensureClient();
 }
 
+export function createEmbyApiClient(api: EmbyApi): ApiClient {
+  const client = createApiClient({ baseUrl: api.basePath });
+  client.addRequestInterceptor((config) => {
+    const headers: Record<string, string> = {
+      Accept: 'application/json',
+      'X-Emby-Client': 'Nekofin',
+      'X-Emby-Device-Name': 'Nekofin Device',
+      'X-Emby-Device-Id': getDeviceId(),
+      'X-Emby-Client-Version': '1.0.0',
+      'X-Emby-Language': 'zh-cn',
+      ...(config.headers as Record<string, string> | undefined),
+    };
+    if (api.accessToken) headers['X-Emby-Token'] = api.accessToken;
+    return { ...config, headers };
+  });
+  client.addResponseInterceptor(async (response) => {
+    if (!response.ok) return response;
+
+    const text = await response.text();
+    if (!text.trim()) {
+      const wrapped: ApiResponse<unknown> = { code: 200, data: null, msg: 'ok' };
+      return wrapped as ApiResponse<unknown>;
+    }
+
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch (error) {
+      console.error('Failed to parse JSON response:', error);
+      const wrapped: ApiResponse<unknown> = { code: 200, data: null, msg: 'ok' };
+      return wrapped as ApiResponse<unknown>;
+    }
+
+    const wrapped: ApiResponse<unknown> = { code: 200, data, msg: 'ok' };
+    return wrapped as ApiResponse<unknown>;
+  });
+  return client;
+}
+
 export function setIfDefined(
   params: URLSearchParams,
   key: string,
