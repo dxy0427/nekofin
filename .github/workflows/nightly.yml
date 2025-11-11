@@ -47,3 +47,57 @@ jobs:
       ios_build_type: release
       build_suffix: _nightly-${{ needs.get-commit-info.outputs.sha_short }}
     secrets: inherit
+
+  upload-to-release:
+    name: Upload to Pre-release
+    needs: [get-commit-info, call-build-workflow]
+    runs-on: ubuntu-latest
+    if: needs.get-commit-info.outputs.should_build == 'true'
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Download Android artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: android-release-main_nightly-${{ needs.get-commit-info.outputs.sha_short }}
+          path: ./artifacts/android
+
+      - name: Download iOS artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: ios-release-main_nightly-${{ needs.get-commit-info.outputs.sha_short }}
+          path: ./artifacts/ios
+
+      - name: Get commit message
+        id: commit_msg
+        run: |
+          if [ "${{ github.event_name }}" == "push" ]; then
+            COMMIT_MSG="${{ github.event.head_commit.message }}"
+          else
+            COMMIT_MSG="Manual trigger"
+          fi
+          echo "message<<EOF" >> $GITHUB_OUTPUT
+          echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Create or update pre-release
+        uses: softprops/action-gh-release@v1
+        with:
+          tag_name: nightly
+          name: Nightly Build
+          body: |
+            ## Nightly Build - ${{ needs.get-commit-info.outputs.sha_short }}
+
+            **Commit Message:**
+            ${{ steps.commit_msg.outputs.message }}
+
+            **Build Date:** ${{ github.event.head_commit.timestamp }}
+          files: |
+            ./artifacts/android/*.apk
+            ./artifacts/ios/*.ipa
+          prerelease: true
+          draft: false
+          token: ${{ secrets.GITHUB_TOKEN }}
