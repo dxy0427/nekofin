@@ -30,7 +30,8 @@
 
 ## 📥 下载
 
-目前只在 [actions](https://github.com/lonzzi/nekofin/actions) 中构建，可以下载最新版本 APK 和 IPA 文件。
+- **Nightly**：<a href="https://github.com/lonzzi/nekofin/releases/tag/nightly"><img src="https://github.com/user-attachments/assets/cf61e197-d756-4606-a8ad-fb591f79fdfc" alt="Nightly Downloads" height="55" /></a>
+- **Stable**：Coming soon
 
 ## 🗺️ Roadmap
 
