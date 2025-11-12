@@ -83,6 +83,20 @@ jobs:
           echo "$COMMIT_MSG" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
 
+      - name: Delete old release assets
+        run: |
+          if gh release view nightly > /dev/null 2>&1; then
+            echo "Found existing nightly release, deleting old assets..."
+            gh release view nightly --json assets --jq '.assets[].name' | while read asset; do
+              echo "Deleting asset: $asset"
+              gh release delete-asset nightly "$asset" -y || true
+            done
+          else
+            echo "No existing nightly release found"
+          fi
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
       - name: Create or update pre-release
         uses: softprops/action-gh-release@v1
         with:
