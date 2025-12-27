@@ -1,6 +1,6 @@
 Pod::Spec.new do |s|
   s.name           = 'VlcPlayer'
-  s.version        = '3.6.1b1'
+  s.version        = '3.7.0'
   s.summary        = 'A sample project summary'
   s.description    = 'A sample project description'
   s.author         = ''
