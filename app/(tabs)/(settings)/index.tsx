@@ -2,6 +2,7 @@ import PageScrollView from '@/components/PageScrollView';
 import { Section } from '@/components/ui/Section';
 import { SettingsRow } from '@/components/ui/SettingsRow';
 import { useMediaServers } from '@/lib/contexts/MediaServerContext';
+import { ThemePreference, useThemePreference } from '@/lib/contexts/ThemePreferenceContext';
 import Constants from 'expo-constants';
 import { useNavigation, useRouter } from 'expo-router';
 import { useEffect } from 'react';
@@ -9,8 +10,21 @@ import { useEffect } from 'react';
 export default function SettingsScreen() {
   const navigation = useNavigation();
   const { servers } = useMediaServers();
+  const { themePreference, setThemePreference } = useThemePreference();
 
   const router = useRouter();
+
+  const themeLabels: Record<ThemePreference, string> = {
+    system: '系统',
+    light: '浅色',
+    dark: '暗色',
+  };
+
+  const themeMenuActions = [
+    { id: 'system', title: '系统' },
+    { id: 'light', title: '浅色' },
+    { id: 'dark', title: '暗色' },
+  ];
 
   const SettingItem = (props: React.ComponentProps<typeof SettingsRow>) => (
     <SettingsRow {...props} />
@@ -39,6 +53,18 @@ export default function SettingsScreen() {
           title="弹幕设置"
           icon="chatbubble-ellipses"
           onPress={() => router.push('/danmaku')}
+        />
+      </Section>
+
+      <Section title="外观">
+        <SettingItem
+          title="主题"
+          subtitle={themeLabels[themePreference]}
+          icon="color-palette"
+          showArrow={false}
+          menuTitle="选择主题"
+          menuActions={themeMenuActions}
+          onMenuAction={(actionId) => setThemePreference(actionId as ThemePreference)}
         />
       </Section>
 

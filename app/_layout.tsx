@@ -2,6 +2,7 @@ import { useColorScheme } from '@/hooks/useColorScheme';
 import { DanmakuSettingsProvider } from '@/lib/contexts/DanmakuSettingsContext';
 import { MediaServerProvider } from '@/lib/contexts/MediaServerContext';
 import { ThemeColorProvider } from '@/lib/contexts/ThemeColorContext';
+import { ThemePreferenceProvider } from '@/lib/contexts/ThemePreferenceContext';
 import { storage } from '@/lib/storage';
 import { BottomSheetModalProvider } from '@gorhom/bottom-sheet';
 import { DarkTheme, DefaultTheme, ThemeProvider } from '@react-navigation/native';
@@ -67,28 +68,30 @@ export default function RootLayout() {
       }}
     >
       <GestureHandlerRootView style={{ flex: 1 }}>
-        <MediaServerProvider>
-          <DanmakuSettingsProvider>
-            <ThemeColorProvider>
-              <BottomSheetModalProvider>
-                <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-                  <Stack
-                    screenOptions={{
-                      headerTransparent: Platform.OS === 'ios',
-                      headerBackTitle: '',
-                      headerBackButtonDisplayMode: 'minimal',
-                    }}
-                  >
-                    <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                    <Stack.Screen name="player" options={{ headerShown: false }} />
-                    <Stack.Screen name="+not-found" />
-                  </Stack>
-                  <StatusBar style="auto" />
-                </ThemeProvider>
-              </BottomSheetModalProvider>
-            </ThemeColorProvider>
-          </DanmakuSettingsProvider>
-        </MediaServerProvider>
+        <ThemePreferenceProvider>
+          <MediaServerProvider>
+            <DanmakuSettingsProvider>
+              <ThemeColorProvider>
+                <BottomSheetModalProvider>
+                  <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                    <Stack
+                      screenOptions={{
+                        headerTransparent: Platform.OS === 'ios',
+                        headerBackTitle: '',
+                        headerBackButtonDisplayMode: 'minimal',
+                      }}
+                    >
+                      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                      <Stack.Screen name="player" options={{ headerShown: false }} />
+                      <Stack.Screen name="+not-found" />
+                    </Stack>
+                    <StatusBar style="auto" />
+                  </ThemeProvider>
+                </BottomSheetModalProvider>
+              </ThemeColorProvider>
+            </DanmakuSettingsProvider>
+          </MediaServerProvider>
+        </ThemePreferenceProvider>
       </GestureHandlerRootView>
     </PersistQueryClientProvider>
   );
