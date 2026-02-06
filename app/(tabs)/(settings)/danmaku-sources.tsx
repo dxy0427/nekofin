@@ -14,16 +14,14 @@ import { Alert, StyleSheet, TouchableOpacity, View } from 'react-native';
 export default function DanmakuSourcesScreen() {
   const { settings, setActiveSource, removeSource, addSource, updateSource } = useDanmakuSettings();
   const navigation = useNavigation();
-  const { accentColor, textColor, backgroundColor, secondarySystemGroupedBackground } = useSettingsColors();
+  const { accentColor, textColor, backgroundColor, secondarySystemGroupedBackground } =
+    useSettingsColors();
 
   const bottomSheetRef = useRef<BottomSheetModal>(null);
-  
-  // 表单状态
   const [editingId, setEditingId] = useState<string | null>(null);
   const [name, setName] = useState('');
   const [url, setUrl] = useState('');
 
-  // 设置顶部导航栏右侧按钮
   useEffect(() => {
     navigation.setOptions({
       headerTitle: '弹幕源管理',
@@ -35,7 +33,6 @@ export default function DanmakuSourcesScreen() {
     });
   }, [navigation, accentColor]);
 
-  // 打开添加模态框
   const handleAddNew = () => {
     setEditingId(null);
     setName('');
@@ -43,7 +40,6 @@ export default function DanmakuSourcesScreen() {
     bottomSheetRef.current?.present();
   };
 
-  // 打开编辑模态框
   const handleEdit = (source: { id: string; name: string; url: string }) => {
     setEditingId(source.id);
     setName(source.name);
@@ -51,7 +47,6 @@ export default function DanmakuSourcesScreen() {
     bottomSheetRef.current?.present();
   };
 
-  // 保存（添加或更新）
   const handleSave = () => {
     if (!name.trim() || !url.trim()) {
       Alert.alert('提示', '名称和地址不能为空');
@@ -66,7 +61,6 @@ export default function DanmakuSourcesScreen() {
     bottomSheetRef.current?.dismiss();
   };
 
-  // 删除确认
   const handleDelete = (id: string) => {
     Alert.alert('删除源', '确定要删除这个弹幕源吗？', [
       { text: '取消', style: 'cancel' },
@@ -92,7 +86,6 @@ export default function DanmakuSourcesScreen() {
                 <Ionicons name="checkmark" size={20} color={accentColor} />
               ) : undefined
             }
-            // 长按或点击菜单进行编辑/删除
             customActions={[
               { id: 'edit', title: '编辑', onPress: () => handleEdit(source) },
               { id: 'delete', title: '删除', onPress: () => handleDelete(source.id) },
@@ -109,17 +102,19 @@ export default function DanmakuSourcesScreen() {
         </View>
       )}
 
-      {/* 添加/编辑 弹窗 */}
       <BottomSheetBackdropModal ref={bottomSheetRef} snapPoints={['50%']}>
         <BottomSheetView style={[styles.sheetContent, { backgroundColor }]}>
           <ThemedText type="subtitle" style={styles.sheetTitle}>
             {editingId ? '编辑源' : '添加源'}
           </ThemedText>
-          
+
           <View style={styles.inputGroup}>
             <ThemedText style={styles.label}>名称</ThemedText>
             <BottomSheetTextInput
-              style={[styles.input, { color: textColor, backgroundColor: secondarySystemGroupedBackground }]}
+              style={[
+                styles.input,
+                { color: textColor, backgroundColor: secondarySystemGroupedBackground },
+              ]}
               placeholder="例如: 官方源"
               value={name}
               onChangeText={setName}
@@ -129,7 +124,10 @@ export default function DanmakuSourcesScreen() {
           <View style={styles.inputGroup}>
             <ThemedText style={styles.label}>API 地址</ThemedText>
             <BottomSheetTextInput
-              style={[styles.input, { color: textColor, backgroundColor: secondarySystemGroupedBackground }]}
+              style={[
+                styles.input,
+                { color: textColor, backgroundColor: secondarySystemGroupedBackground },
+              ]}
               placeholder="https://api.dandanplay.net"
               value={url}
               onChangeText={setUrl}
