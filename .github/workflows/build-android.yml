@@ -1,51 +1,26 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch:  # 手动触发
+  workflow_dispatch:
   push:
     tags:
-      - 'v*'           # 推送 v开头标签自动触发
+      - 'v*'
 
 jobs:
   build:
-    name: Build Release APK
+    name: Build APK
     runs-on: ubuntu-latest
-    timeout-minutes: 30  # 防止卡死
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
-        with:
-          fetch-depth: 0  # 拉全历史，保证标签正常
 
-      # 安装 jq（稳健解析 package.json 版本）
-      - name: Install jq
-        run: sudo apt-get update && sudo apt-get install -y jq
-
-      # ========== 缓存：大幅加速构建 ==========
-      - name: Cache Bun dependencies
-        uses: actions/cache@v4
-        with:
-          path: ~/.bun/install/cache
-          key: ${{ runner.os }}-bun-${{ hashFiles('bun.lockb') }}
-          restore-keys: ${{ runner.os }}-bun-
-
-      - name: Cache Gradle
-        uses: actions/cache@v4
-        with:
-          path: |
-            ~/.gradle/caches
-            ~/.gradle/wrapper
-          key: ${{ runner.os }}-gradle-${{ hashFiles('android/*.gradle*', 'android/gradle/wrapper/gradle-wrapper.properties') }}
-          restore-keys: ${{ runner.os }}-gradle-
-
-      # ========== 环境配置 ==========
       - name: Setup Bun
         uses: oven-sh/setup-bun@v1
         with:
           bun-version: latest
 
-      - name: Setup Java 17
+      - name: Setup Java
         uses: actions/setup-java@v4
         with:
           distribution: 'zulu'
@@ -54,21 +29,18 @@ jobs:
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
 
-      # ========== 安装依赖 & 生成安卓项目 ==========
       - name: Install dependencies
-        run: bun install --frozen-lockfile
+        run: bun install
 
-      - name: Expo prebuild (clean generate Android)
-        run: npx expo prebuild --platform android --clean  # --clean 避免旧文件冲突
+      - name: Prebuild (Generate Android Project)
+        run: npx expo prebuild --platform android
 
-      # ========== 签名文件解码 ==========
-      - name: Decode Android Keystore
+      - name: Decode Keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d > ./android/app/my-upload-key.keystore
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d -i > ./android/app/my-upload-key.keystore
 
-      # ========== Gradle 打包 Release APK ==========
       - name: Build APK with Gradle
         working-directory: ./android
         env:
@@ -78,32 +50,22 @@ jobs:
           ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
         run: |
           chmod +x gradlew
-          ./gradlew assembleRelease --no-build-cache  # 稳定构建
+          ./gradlew assembleRelease
 
-      # ========== 提取版本 & 重命名 APK ==========
-      - name: Rename APK & get filename
+      - name: Rename APK
         id: rename_apk
         run: |
-          # 稳健获取版本号（jq 解析 JSON）
-          VERSION=$(jq -r .version package.json)
-          APK_NAME="nekofin-${VERSION}-arm64-v8a.apk"
-          # 源路径（Expo/React Native 标准输出）
-          SRC_APK="android/app/build/outputs/apk/release/app-release.apk"
+          VERSION=$(grep '"version":' package.json | cut -d '"' -f 4)
           
-          # 校验文件存在
-          if [ ! -f "$SRC_APK" ]; then
-            echo "APK not found at $SRC_APK"
-            exit 1
-          fi
+          NEW_NAME="nekofin-${VERSION}-arm64-v8a.apk"
           
-          mv "$SRC_APK" "$APK_NAME"
-          echo "apk_name=$APK_NAME" >> $GITHUB_OUTPUT
+          mv android/app/build/outputs/apk/release/app-release.apk $NEW_NAME
+          
+          echo "apk_name=$NEW_NAME" >> $GITHUB_OUTPUT
 
-      # ========== 上传构建产物 ==========
-      - name: Upload APK Artifact
+      - name: Upload Artifact
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.rename_apk.outputs.apk_name }}
           path: ${{ steps.rename_apk.outputs.apk_name }}
-          retention-days: 7  # 制品保留7天
-          if-no-files-found: error  # 没打包成功直接报错
+          retention-days: 7
