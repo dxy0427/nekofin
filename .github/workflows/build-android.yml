@@ -1,10 +1,10 @@
 name: Build Android APK
 
 on:
-  workflow_dispatch:
+  workflow_dispatch: # 允许手动触发
   push:
     tags:
-      - 'v*'
+      - 'v*' # 推送 v1.0.1 等标签时触发
 
 jobs:
   build:
@@ -33,18 +33,20 @@ jobs:
         run: bun install
 
       - name: Prebuild (Generate Android Project)
-        # 修正：去掉了不支持的 --no-interactive 参数
+        # 修正：移除了不支持的 --no-interactive 参数
         run: npx expo prebuild --platform android
 
       - name: Decode Keystore
         env:
           ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
         run: |
-          echo $ANDROID_KEYSTORE_BASE64 | base64 --decode > ./android/app/my-upload-key.keystore
+          # 修正：添加 -i 参数忽略换行符等垃圾字符，给变量加引号防止解析错误
+          echo "$ANDROID_KEYSTORE_BASE64" | base64 -d -i > ./android/app/my-upload-key.keystore
 
       - name: Build APK with Gradle
         working-directory: ./android
         env:
+          # 将 Secrets 传递给 Gradle 环境变量
           ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_FILE: my-upload-key.keystore
           ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
           ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
@@ -56,9 +58,15 @@ jobs:
       - name: Rename APK
         id: rename_apk
         run: |
+          # 获取 package.json 中的版本号
           VERSION=$(grep '"version":' ../package.json | cut -d '"' -f 4)
+          
+          # 定义文件名
           NEW_NAME="nekofin-${VERSION}-arm64-v8a.apk"
+          
+          # 移动并重命名生成的 APK
           mv app/build/outputs/apk/release/app-release.apk $NEW_NAME
+          
           echo "apk_name=$NEW_NAME" >> $GITHUB_OUTPUT
 
       - name: Upload Artifact
