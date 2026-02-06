@@ -10,17 +10,11 @@ import {
   ticksToMilliseconds,
   ticksToSeconds,
 } from '@/lib/utils';
-import {
-  MediaStats,
-  MediaTracks,
-  VlcPlayerView,
-  VlcPlayerViewRef,
-} from '@/modules/vlc-player';
+import { MediaStats, VlcPlayerView, VlcPlayerViewRef } from '@/modules/vlc-player';
 import { DandanComment } from '@/services/dandanplay';
-import { SubtitleDeliveryMethod } from '@jellyfin/sdk/lib/generated-client/models';
 import { useQuery } from '@tanstack/react-query';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { useRouter } from 'expo-router';
+import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
@@ -39,7 +33,14 @@ const LoadingIndicator = ({ title }: { title?: string }) => {
 };
 
 export const VideoPlayer = ({ itemId }: { itemId: string }) => {
-  const { currentServer, currentApi } = useMediaServers();
+  // 接收从详情页传来的参数
+  const { mediaSourceId, audioStreamIndex, subtitleStreamIndex } = useLocalSearchParams<{
+    mediaSourceId?: string;
+    audioStreamIndex?: string;
+    subtitleStreamIndex?: string;
+  }>();
+
+  const { currentServer } = useMediaServers();
   const router = useRouter();
   const mediaAdapter = useMediaAdapter();
   const { settings, getActiveSource } = useDanmakuSettings();
@@ -53,21 +54,10 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
-  const [isStopped, setIsStopped] = useState(false);
   const [initialTime, setInitialTime] = useState<number>(-1);
-  const [tracks, setTracks] = useState<MediaTracks | undefined>(undefined);
   const [rate, setRate] = useState(1);
   const prevRateRef = useRef<number>(1);
   const [mediaStats, setMediaStats] = useState<MediaStats | null>(null);
-
-  // 选中的源ID和字幕流索引
-  const [selectedMediaSourceId, setSelectedMediaSourceId] = useState<string | null>(null);
-  const [serverSubtitleStreamIndex, setServerSubtitleStreamIndex] = useState<number | undefined>(
-    undefined,
-  );
-  // 记录当前选中的音轨/字幕索引 (UI显示用)
-  const [selectedAudioIndex, setSelectedAudioIndex] = useState<number | undefined>(undefined);
-  const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState<number | undefined>(undefined);
 
   const enableTranscoding = storage.getBoolean('enableTranscoding') ?? false;
   const enableSubtitleBurnIn = storage.getBoolean('enableSubtitleBurnIn') ?? false;
@@ -82,7 +72,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const danmakuLayer = useRef<DanmakuLayerRef>(null);
   const currentTime = useSharedValue(0);
 
-  // 1. 获取 Item 详情
   const { data: itemDetail } = useQuery({
     queryKey: ['itemDetail', itemId, currentServer?.userId],
     queryFn: async () => {
@@ -92,25 +81,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     },
     enabled: !!itemId && !!currentServer,
   });
-
-  // 2. 获取所有的 MediaSources (版本)
-  const { data: playbackInfo } = useQuery({
-    queryKey: ['mediaSources', itemId, currentServer?.userId],
-    queryFn: async () => {
-      if (!currentServer) return null;
-      return await mediaAdapter.getItemMediaSources({ itemId });
-    },
-    enabled: !!itemId && !!currentServer,
-  });
-
-  const mediaSources = useMemo(() => playbackInfo?.mediaSources ?? [], [playbackInfo]);
-
-  // 初始化 selectedMediaSourceId
-  useEffect(() => {
-    if (!selectedMediaSourceId && mediaSources.length > 0) {
-      setSelectedMediaSourceId(mediaSources[0].id);
-    }
-  }, [mediaSources, selectedMediaSourceId]);
 
   const { data: seriesInfo } = useQuery({
     queryKey: ['seriesInfo', itemDetail?.seriesId, currentServer?.userId],
@@ -155,8 +125,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     setDanmakuEpisodeInfo(episodeInfo);
   };
 
-  // 3. 获取播放流信息
-  const { data: streamInfo, isFetching: isStreamInfoFetching } = useQuery({
+  const { data: streamInfo } = useQuery({
     queryKey: [
       'streamInfo',
       itemId,
@@ -165,34 +134,33 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       maxBitrate,
       enableSubtitleBurnIn,
       selectedCodec,
-      selectedMediaSourceId,
-      serverSubtitleStreamIndex, // 依赖字幕索引，变化时重新获取流
+      mediaSourceId, // 依赖参数
+      subtitleStreamIndex, // 依赖参数
+      audioStreamIndex, // 依赖参数
     ],
     queryFn: async () => {
-      if (!currentServer || !itemDetail || !selectedMediaSourceId) return null;
+      if (!currentServer || !itemDetail) return null;
 
-      // 只有在真的要切换流时才重置状态，防止无限重置
-      // setIsLoaded(false); // 暂时注释，避免频繁闪烁
-      // setIsBuffering(true);
-
-      const streamParams = {
+      const baseParams = {
         item: itemDetail,
         userId: currentServer.userId,
         startTimeTicks: itemDetail.userData?.playbackPositionTicks || 0,
         deviceId: getDeviceId(),
-        mediaSourceId: selectedMediaSourceId,
-        subtitleStreamIndex: serverSubtitleStreamIndex,
+        // 传入选择的参数
+        mediaSourceId: mediaSourceId ?? undefined,
+        audioStreamIndex: audioStreamIndex ? parseInt(audioStreamIndex) : undefined,
+        subtitleStreamIndex: subtitleStreamIndex ? parseInt(subtitleStreamIndex) : undefined,
       };
 
       if (!enableTranscoding) {
         return await mediaAdapter.getStreamInfo({
-          ...streamParams,
+          ...baseParams,
           deviceProfile: generateDeviceProfile(),
         });
       }
 
       return await mediaAdapter.getStreamInfo({
-        ...streamParams,
+        ...baseParams,
         deviceProfile: generateDeviceProfile({
           transcode: enableTranscoding,
           maxBitrate: maxBitrate,
@@ -202,17 +170,8 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
         alwaysBurnInSubtitleWhenTranscoding: enableSubtitleBurnIn,
       });
     },
-    enabled: !!currentServer && !!itemDetail && !!selectedMediaSourceId,
-    staleTime: 0,
-    gcTime: 0,
+    enabled: !!currentServer && !!itemDetail,
   });
-
-  // 获取 API 返回的所有字幕流（包括内置的）
-  const subtitleStreams = useMemo(() => {
-    return (
-      streamInfo?.mediaSource?.mediaStreams?.filter((s) => s.type === 'Subtitle') || []
-    );
-  }, [streamInfo?.mediaSource]);
 
   const { syncPlaybackProgress } = usePlaybackSync({
     currentServer,
@@ -235,8 +194,8 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   });
 
   const showLoading = useMemo(() => {
-    return isBuffering || !streamInfo?.url || !isLoaded || isStreamInfoFetching;
-  }, [isBuffering, streamInfo?.url, isLoaded, isStreamInfoFetching]);
+    return isBuffering || !streamInfo?.url || !isLoaded;
+  }, [isBuffering, streamInfo?.url, isLoaded]);
 
   const duration = useMemo(() => {
     return ticksToMilliseconds(itemDetail?.runTimeTicks ?? 0) ?? mediaInfo?.duration ?? 0;
@@ -253,9 +212,9 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       return `${seriesName} S${seasonNumber}E${episodeNumber} - ${episodeName}`;
     }
     if (itemDetail.type === 'Movie') {
-        return `${itemDetail.name} (${itemDetail.productionYear})`;
+      return `${itemDetail.name} (${itemDetail.productionYear})`;
     }
-    
+
     return episodeName || seriesName || '';
   }, [itemDetail]);
 
@@ -264,10 +223,8 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       const startTimeMs = Math.round(itemDetail.userData.playbackPositionTicks! / 10000);
       currentTime.value = startTimeMs;
       setInitialTime(ticksToSeconds(itemDetail.userData.playbackPositionTicks!));
-    } else if (isStreamInfoFetching) {
-      setInitialTime(currentTime.value / 1000);
     }
-  }, [itemDetail, currentTime, isStreamInfoFetching, initialTime]);
+  }, [itemDetail, currentTime, initialTime]);
 
   useEffect(() => {
     (async () => {
@@ -278,21 +235,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       }
     })();
   }, [isPlaying]);
-
-  useEffect(() => {
-    if (!player.current) return;
-    (async () => {
-      try {
-        const audioTracks = await player.current?.getAudioTracks();
-        setTracks((prev) => ({
-          ...prev,
-          audio: audioTracks ?? [],
-        }));
-      } catch (error) {
-        console.error('Error setting tracks:', error);
-      }
-    })();
-  }, [player, isLoaded]);
 
   const handlePlayPause = useCallback(() => {
     if (isPlaying) {
@@ -331,64 +273,27 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     [currentTime, duration, danmakuLayer],
   );
 
-  const handleAudioTrackChange = useCallback(
-    (trackIndex: number) => {
-      setSelectedAudioIndex(trackIndex);
-      player.current?.setAudioTrack(trackIndex);
+  const handleEpisodeSelect = useCallback(
+    (episodeId: string) => {
+      router.replace({
+        pathname: '/player',
+        params: { itemId: episodeId },
+      });
     },
-    [],
+    [router],
   );
-
-  const handleSubtitleTrackChange = useCallback(
-    (trackIndex: number) => {
-        setSelectedSubtitleIndex(trackIndex);
-
-        if (trackIndex === -1) {
-            player.current?.setSubtitleTrack(-1);
-            setServerSubtitleStreamIndex(undefined); 
-            return;
-        }
-
-        // 无论如何先尝试触发服务端的流重载（以支持烧录等）
-        setServerSubtitleStreamIndex(trackIndex);
-    },
-    [],
-  );
-
-  const handleMediaSourceChange = useCallback((sourceId: string) => {
-    setSelectedMediaSourceId(sourceId);
-    setServerSubtitleStreamIndex(undefined);
-    setSelectedSubtitleIndex(undefined);
-  }, []);
-
-  const handlePreviousEpisode = useCallback(() => {
-    if (previousEpisode?.id) router.replace({ pathname: '/player', params: { itemId: previousEpisode.id } });
-  }, [previousEpisode, router]);
-
-  const handleNextEpisode = useCallback(() => {
-    if (nextEpisode?.id) router.replace({ pathname: '/player', params: { itemId: nextEpisode.id } });
-  }, [nextEpisode, router]);
-
-  const handleEpisodeSelect = useCallback((episodeId: string) => {
-    router.replace({ pathname: '/player', params: { itemId: episodeId } });
-  }, [router]);
-
-  // 安全检查：只有当 url 存在且非空时才渲染 Player
-  const shouldRenderPlayer = !!streamInfo?.url && initialTime >= 0;
 
   return (
     <View style={styles.container}>
-      {shouldRenderPlayer && (
+      {streamInfo?.url && initialTime >= 0 && (
         <VlcPlayerView
           ref={player}
           style={styles.video}
           source={{
-            uri: streamInfo!.url!, // 确信不为空
+            uri: streamInfo.url,
             isNetwork: true,
             startPosition: initialTime,
             autoplay: true,
-            // 关键修复：不要传 externalSubtitles，除非你非常确定格式正确
-            // externalSubtitles: undefined 
           }}
           onVideoProgress={(e) => {
             const { duration, currentTime: newCurrentTime } = e.nativeEvent;
@@ -447,18 +352,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
         onPlayPause={handlePlayPause}
         onRateChange={handleRateChange}
         rate={rate}
-        tracks={tracks}
-        
-        selectedAudioTrackIndex={selectedAudioIndex}
-        selectedSubtitleTrackIndex={selectedSubtitleIndex}
-        
-        onAudioTrackChange={handleAudioTrackChange}
-        onSubtitleTrackChange={handleSubtitleTrackChange}
-        
-        hasPreviousEpisode={hasPreviousEpisode}
-        hasNextEpisode={hasNextEpisode}
-        onPreviousEpisode={handlePreviousEpisode}
-        onNextEpisode={handleNextEpisode}
         mediaStats={mediaStats}
         onCommentsLoaded={handleCommentsLoaded}
         danmakuEpisodeInfo={danmakuEpisodeInfo}
@@ -466,10 +359,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
         episodes={episodes}
         currentItem={itemDetail}
         onEpisodeSelect={handleEpisodeSelect}
-        mediaSources={mediaSources}
-        currentMediaSourceId={selectedMediaSourceId}
-        onMediaSourceChange={handleMediaSourceChange}
-        subtitleStreams={subtitleStreams}
       />
     </View>
   );
