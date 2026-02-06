@@ -1,6 +1,6 @@
-import { MediaStats, MediaTrack, MediaTracks } from '@/modules/vlc-player';
+import { MediaStats, MediaTracks } from '@/modules/vlc-player';
 import { DandanComment } from '@/services/dandanplay';
-import { MediaItem, MediaSource, MediaStream } from '@/services/media/types';
+import { MediaItem } from '@/services/media/types';
 import { createContext, useContext } from 'react';
 import { SharedValue } from 'react-native-reanimated';
 
@@ -16,18 +16,10 @@ export type PlayerContextValue = {
   onPlayPause: () => void;
   onRateChange?: (newRate: number | null, options?: { remember?: boolean }) => void;
   rate: number;
-  tracks?: MediaTracks;
-  selectedTracks?: MediaTrack;
   
-  selectedAudioTrackIndex?: number;
-  selectedSubtitleTrackIndex?: number;
+  // 暂时保留 tracks，防止 Controls 报错，但不作为主要逻辑依赖
+  tracks?: MediaTracks;
 
-  onAudioTrackChange?: (trackIndex: number) => void;
-  onSubtitleTrackChange?: (trackIndex: number) => void;
-  hasPreviousEpisode?: boolean;
-  hasNextEpisode?: boolean;
-  onPreviousEpisode?: () => void;
-  onNextEpisode?: () => void;
   mediaStats?: MediaStats | null;
 
   showControls: boolean;
@@ -49,20 +41,11 @@ export type PlayerContextValue = {
   danmakuEpisodeInfo?: { animeTitle: string; episodeTitle: string } | undefined;
   danmakuComments: DandanComment[];
 
-  // Episode list related
   episodes: MediaItem[];
   currentItem?: MediaItem | null;
   isMovie: boolean;
   episodeListDrawerRef: React.RefObject<EpisodeListDrawerRef | null>;
   onEpisodeSelect: (episodeId: string) => void;
-  
-  // Versions
-  mediaSources: MediaSource[];
-  currentMediaSourceId: string | null;
-  onMediaSourceChange: (sourceId: string) => void;
-  
-  // Subtitles
-  subtitleStreams: MediaStream[];
 };
 
 export const PlayerContext = createContext<PlayerContextValue | null>(null);
