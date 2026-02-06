@@ -54,16 +54,11 @@ jobs:
 
       - name: Rename APK
         id: rename_apk
-        # 这一步在根目录运行
         run: |
-          # 1. 直接读取当前目录下的 package.json
           VERSION=$(grep '"version":' package.json | cut -d '"' -f 4)
           
-          # 2. 定义新文件名
           NEW_NAME="nekofin-${VERSION}-arm64-v8a.apk"
           
-          # 3. 加上 android/ 前缀来定位生成的 APK
-          # 注意：如果前面的 build 成功，文件应该在这里
           mv android/app/build/outputs/apk/release/app-release.apk $NEW_NAME
           
           echo "apk_name=$NEW_NAME" >> $GITHUB_OUTPUT
@@ -72,6 +67,5 @@ jobs:
         uses: actions/upload-artifact@v4
         with:
           name: ${{ steps.rename_apk.outputs.apk_name }}
-          # 因为上面把文件移动到了根目录，所以这里直接写文件名即可
           path: ${{ steps.rename_apk.outputs.apk_name }}
           retention-days: 7
