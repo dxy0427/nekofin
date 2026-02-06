@@ -1,0 +1,75 @@
+name: Build Android APK
+
+on:
+  workflow_dispatch: # 允许手动触发
+  push:
+    tags:
+      - 'v*' # 推送 v1.0.1 等标签时触发
+
+jobs:
+  build:
+    name: Build APK
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Setup Bun
+        uses: oven-sh/setup-bun@v1
+        with:
+          bun-version: latest
+
+      - name: Setup Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: 'zulu'
+          java-version: '17'
+
+      - name: Setup Android SDK
+        uses: android-actions/setup-android@v3
+
+      - name: Install dependencies
+        run: bun install
+
+      - name: Prebuild (Generate Android Project)
+        run: npx expo prebuild --platform android --no-interactive
+
+      - name: Decode Keystore
+        env:
+          ANDROID_KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+        run: |
+          echo $ANDROID_KEYSTORE_BASE64 | base64 --decode > ./android/app/my-upload-key.keystore
+
+      - name: Build APK with Gradle
+        working-directory: ./android
+        env:
+          # 将 Secrets 传递给 Gradle 环境变量
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_FILE: my-upload-key.keystore
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          ORG_GRADLE_PROJECT_MYAPP_UPLOAD_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          chmod +x gradlew
+          ./gradlew assembleRelease
+
+      - name: Rename APK
+        id: rename_apk
+        run: |
+          # 获取 package.json 中的版本号
+          VERSION=$(grep '"version":' package.json | cut -d '"' -f 4)
+          
+          # 定义文件名 (你的配置中 app.config.ts 已经限制了 abiFilters 为 arm64-v8a)
+          NEW_NAME="nekofin-${VERSION}-arm64-v8a.apk"
+          
+          # 移动并重命名生成的 APK
+          mv android/app/build/outputs/apk/release/app-release.apk $NEW_NAME
+          
+          echo "apk_name=$NEW_NAME" >> $GITHUB_OUTPUT
+
+      - name: Upload Artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ steps.rename_apk.outputs.apk_name }}
+          path: ${{ steps.rename_apk.outputs.apk_name }}
+          retention-days: 7
