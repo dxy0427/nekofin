@@ -16,17 +16,14 @@ export type PlayerContextValue = {
   onPlayPause: () => void;
   onRateChange?: (newRate: number | null, options?: { remember?: boolean }) => void;
   rate: number;
-  
-  // VLC 检测到的轨道 (底层)
   tracks?: MediaTracks;
+  selectedTracks?: MediaTrack;
   
-  // 当前选中的轨道信息 (UI状态)
   selectedAudioTrackIndex?: number;
   selectedSubtitleTrackIndex?: number;
 
   onAudioTrackChange?: (trackIndex: number) => void;
   onSubtitleTrackChange?: (trackIndex: number) => void;
-  
   hasPreviousEpisode?: boolean;
   hasNextEpisode?: boolean;
   onPreviousEpisode?: () => void;
@@ -52,19 +49,19 @@ export type PlayerContextValue = {
   danmakuEpisodeInfo?: { animeTitle: string; episodeTitle: string } | undefined;
   danmakuComments: DandanComment[];
 
-  // 剧集列表相关
+  // Episode list related
   episodes: MediaItem[];
   currentItem?: MediaItem | null;
   isMovie: boolean;
   episodeListDrawerRef: React.RefObject<EpisodeListDrawerRef | null>;
   onEpisodeSelect: (episodeId: string) => void;
-
-  // --- 版本/媒体源管理 ---
+  
+  // Versions
   mediaSources: MediaSource[];
   currentMediaSourceId: string | null;
   onMediaSourceChange: (sourceId: string) => void;
-
-  // --- API 提供的字幕流 (用于显示内置字幕) ---
+  
+  // Subtitles
   subtitleStreams: MediaStream[];
 };
 
