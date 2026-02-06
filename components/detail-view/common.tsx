@@ -1,104 +1,22 @@
-import { useMediaAdapter } from '@/hooks/useMediaAdapter';
-import { useSettingsColors } from '@/hooks/useSettingsColors';
 import { useThemeColor } from '@/hooks/useThemeColor';
 import { useAccentColor } from '@/lib/contexts/ThemeColorContext';
-import { formatBitrate, formatDurationFromTicks, formatFileSize } from '@/lib/utils';
-import { MediaItem, MediaSource } from '@/services/media/types';
+import { formatDurationFromTicks } from '@/lib/utils';
+import { MediaItem } from '@/services/media/types';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
-import { useQuery } from '@tanstack/react-query';
 import { GlassView, isLiquidGlassAvailable } from 'expo-glass-effect';
 import { useRouter } from 'expo-router';
 import { useEffect, useMemo, useRef, useState } from 'react';
 import { StyleSheet, Text, TextLayoutEvent, TouchableOpacity, View } from 'react-native';
-import { MenuAction, MenuView } from '@react-native-menu/menu';
 import Animated, { useAnimatedStyle, useSharedValue, withTiming } from 'react-native-reanimated';
-import { useMediaServers } from '@/lib/contexts/MediaServerContext';
 
 import { BottomSheetBackdropModal } from '../BottomSheetBackdropModal';
 import { ThemedText } from '../ThemedText';
-
-// 辅助函数：获取媒体源的显示名称 (增加安全检查)
-const getMediaSourceLabel = (source: MediaSource) => {
-  const videoStream = source.mediaStreams?.find((s) => s.type === 'Video');
-  const height = videoStream?.height ? `${videoStream.height}p` : 'Unknown';
-  const codec = videoStream?.codec?.toUpperCase() || '';
-  const container = source.container || '';
-  const size = source.size ? formatFileSize(source.size) : '';
-  const bitrate = source.bitrate ? formatBitrate(source.bitrate) : '';
-  
-  // 过滤掉空字符串，用 ' / ' 连接
-  return [height, container, codec, size, bitrate].filter(Boolean).join(' / ');
-};
 
 export const PlayButton = ({ item }: { item: MediaItem }) => {
   const router = useRouter();
   const { accentColor } = useAccentColor();
   const textColor = useThemeColor({ light: '#fff', dark: '#fff' }, 'text');
-  const optionTitleColor = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
-  const separatorColor = useThemeColor({ light: '#e5e5ea', dark: '#38383a' }, 'background');
-  const { secondarySystemGroupedBackground, secondaryTextColor } = useSettingsColors();
-  const mediaAdapter = useMediaAdapter();
-  const { currentServer } = useMediaServers();
-
-  // 获取媒体源信息
-  const { data: playbackInfo } = useQuery({
-    queryKey: ['mediaSources', item.id, currentServer?.userId],
-    queryFn: async () => {
-      if (!item.id || !currentServer) return null;
-      return await mediaAdapter.getItemMediaSources({ itemId: item.id });
-    },
-    enabled: !!item.id && !!currentServer,
-  });
-
-  const mediaSources = useMemo(() => playbackInfo?.mediaSources ?? [], [playbackInfo]);
-
-  // 状态管理
-  const [selectedSourceId, setSelectedSourceId] = useState<string | null>(null);
-  const [selectedAudioIndex, setSelectedAudioIndex] = useState<number | undefined>(undefined);
-  const [selectedSubtitleIndex, setSelectedSubtitleIndex] = useState<number | undefined>(undefined);
-
-  // 默认选中第一个源
-  useEffect(() => {
-    if (mediaSources.length > 0 && !selectedSourceId) {
-      setSelectedSourceId(mediaSources[0].id);
-    }
-  }, [mediaSources, selectedSourceId]);
-
-  // 获取当前选中的源
-  const currentSource = useMemo(
-    () => mediaSources.find((s) => s.id === selectedSourceId) || mediaSources[0],
-    [mediaSources, selectedSourceId],
-  );
-
-  // 安全获取流列表 (修复闪退的关键：添加 ?. 和 ?? [])
-  const audioStreams = useMemo(
-    () => currentSource?.mediaStreams?.filter((s) => s.type === 'Audio') ?? [],
-    [currentSource],
-  );
-
-  const subtitleStreams = useMemo(
-    () => currentSource?.mediaStreams?.filter((s) => s.type === 'Subtitle') ?? [],
-    [currentSource],
-  );
-
-  // 自动选择默认轨道
-  useEffect(() => {
-    if (!currentSource) return;
-
-    // 如果还没选过音频，选默认的或第一个
-    if (selectedAudioIndex === undefined && audioStreams.length > 0) {
-        const defaultAudio = audioStreams.find((s) => s.isDefault) || audioStreams[0];
-        setSelectedAudioIndex(defaultAudio.index);
-    }
-
-    // 如果还没选过字幕，选默认/强制的，否则设为-1(关闭)
-    if (selectedSubtitleIndex === undefined) {
-        const defaultSub = subtitleStreams.find(s => s.isDefault) || subtitleStreams.find(s => s.isForced);
-        setSelectedSubtitleIndex(defaultSub ? defaultSub.index : -1);
-    }
-  }, [currentSource, audioStreams, subtitleStreams, selectedAudioIndex, selectedSubtitleIndex]);
-
 
   const progressPercent = useMemo(() => {
     const pct = item.userData?.playedPercentage ?? (item.userData?.played ? 100 : 0);
@@ -116,178 +34,60 @@ export const PlayButton = ({ item }: { item: MediaItem }) => {
   const animatedWidth = useSharedValue(0);
 
   useEffect(() => {
-    animatedWidth.value = withTiming(progressPercent, { duration: 800 });
+    animatedWidth.value = withTiming(progressPercent, {
+      duration: 800,
+    });
   }, [progressPercent, animatedWidth]);
 
   const animatedStyle = useAnimatedStyle(() => ({
     width: `${animatedWidth.value}%`,
   }));
 
-  const handlePlay = () => {
-    if (!item.id) return;
-    router.push({
-      pathname: '/player',
-      params: { 
-          itemId: item.id,
-          // 传递参数时转为字符串，确保兼容
-          mediaSourceId: selectedSourceId ?? '',
-          audioStreamIndex: selectedAudioIndex !== undefined ? String(selectedAudioIndex) : '',
-          subtitleStreamIndex: selectedSubtitleIndex !== undefined ? String(selectedSubtitleIndex) : ''
-      },
-    });
-  };
-
-  // 构造菜单 Actions
-  const sourceActions: MenuAction[] = mediaSources.map(s => ({
-      id: s.id,
-      title: getMediaSourceLabel(s),
-      state: s.id === selectedSourceId ? 'on' : 'off',
-  }));
-
-  const audioActions: MenuAction[] = audioStreams.map(s => ({
-      id: String(s.index),
-      title: s.title || s.language || `Audio ${s.index}`,
-      subtitle: s.codec?.toUpperCase(),
-      state: s.index === selectedAudioIndex ? 'on' : 'off',
-  }));
-
-  const subtitleActions: MenuAction[] = [
-      { id: '-1', title: '关闭字幕', state: selectedSubtitleIndex === -1 ? 'on' : 'off' },
-      ...subtitleStreams.map(s => ({
-          id: String(s.index),
-          title: s.title || s.language || `Subtitle ${s.index}`,
-          subtitle: s.codec?.toUpperCase(),
-          state: s.index === selectedSubtitleIndex ? 'on' : 'off',
-      }))
-  ];
-  
-  // 显示文本
-  const currentSourceLabel = currentSource ? getMediaSourceLabel(currentSource) : '加载中...';
-  
-  const currentAudioLabel = audioStreams.find(s => s.index === selectedAudioIndex)?.title 
-    || audioStreams.find(s => s.index === selectedAudioIndex)?.language 
-    || (audioStreams.length > 0 ? `Audio ${selectedAudioIndex}` : '默认音频');
-
-  const currentSubtitleLabel = selectedSubtitleIndex === -1 ? '关闭' : (
-      subtitleStreams.find(s => s.index === selectedSubtitleIndex)?.title 
-      || subtitleStreams.find(s => s.index === selectedSubtitleIndex)?.language 
-      || (subtitleStreams.length > 0 ? `Subtitle ${selectedSubtitleIndex}` : '关闭')
-  );
-
   return (
-    <View>
-      {/* 选项区域 - 仅当有数据时显示 */}
-      {mediaSources.length > 0 && (
-        <View style={[styles.optionsContainer, { backgroundColor: secondarySystemGroupedBackground }]}>
-           
-           {/* 版本选择 */}
-           {mediaSources.length > 1 && (
-             <>
-               <MenuView
-                title="选择版本"
-                actions={sourceActions}
-                onPressAction={({ nativeEvent }) => setSelectedSourceId(nativeEvent.event)}
-               >
-                   <TouchableOpacity style={styles.optionRow}>
-                       <Ionicons name="layers-outline" size={20} color={secondaryTextColor} />
-                       <View style={styles.optionTextContainer}>
-                           <Text style={[styles.optionTitle, { color: optionTitleColor }]} numberOfLines={1}>
-                               {currentSourceLabel}
-                           </Text>
-                       </View>
-                       <Ionicons name="chevron-down" size={16} color={secondaryTextColor} />
-                   </TouchableOpacity>
-               </MenuView>
-               <View style={[styles.separator, { backgroundColor: separatorColor }]} />
-             </>
-           )}
-
-           {/* 音频选择 */}
-           {audioStreams.length > 1 && (
-            <>
-               <MenuView
-                title="选择音频"
-                actions={audioActions}
-                onPressAction={({ nativeEvent }) => setSelectedAudioIndex(parseInt(nativeEvent.event))}
-               >
-                   <TouchableOpacity style={styles.optionRow}>
-                       <Ionicons name="musical-notes-outline" size={20} color={secondaryTextColor} />
-                       <View style={styles.optionTextContainer}>
-                           <Text style={[styles.optionTitle, { color: optionTitleColor }]} numberOfLines={1}>
-                               {currentAudioLabel}
-                           </Text>
-                       </View>
-                       <Ionicons name="chevron-down" size={16} color={secondaryTextColor} />
-                   </TouchableOpacity>
-               </MenuView>
-               <View style={[styles.separator, { backgroundColor: separatorColor }]} />
-            </>
-           )}
-
-           {/* 字幕选择 */}
-           {subtitleStreams.length > 0 && (
-             <MenuView
-              title="选择字幕"
-              actions={subtitleActions}
-              onPressAction={({ nativeEvent }) => setSelectedSubtitleIndex(parseInt(nativeEvent.event))}
-             >
-                 <TouchableOpacity style={styles.optionRow}>
-                     <Ionicons name="chatbox-ellipses-outline" size={20} color={secondaryTextColor} />
-                     <View style={styles.optionTextContainer}>
-                         <Text style={[styles.optionTitle, { color: optionTitleColor }]} numberOfLines={1}>
-                             {currentSubtitleLabel}
-                         </Text>
-                     </View>
-                     <Ionicons name="chevron-down" size={16} color={secondaryTextColor} />
-                 </TouchableOpacity>
-             </MenuView>
-           )}
-        </View>
+    <GlassView
+      style={[
+        detailViewStyles.playButton,
+        { borderColor: accentColor, backgroundColor: accentColor },
+        isLiquidGlassAvailable() && { borderRadius: 999, backgroundColor: 'transparent' },
+      ]}
+      isInteractive
+      tintColor={`${accentColor}20`}
+    >
+      {progressPercent > 0 && (
+        <Animated.View
+          pointerEvents="none"
+          style={[
+            detailViewStyles.playButtonProgressFill,
+            {
+              backgroundColor: accentColor,
+              borderRadius: isLiquidGlassAvailable() ? 999 : 8,
+            },
+            animatedStyle,
+          ]}
+        />
       )}
-
-      {/* 播放按钮 */}
-      <GlassView
-        style={[
-          detailViewStyles.playButton,
-          { borderColor: accentColor, backgroundColor: accentColor },
-          isLiquidGlassAvailable() && { borderRadius: 999, backgroundColor: 'transparent' },
-        ]}
-        isInteractive
-        tintColor={`${accentColor}20`}
+      <TouchableOpacity
+        onPress={() => {
+          // 简单直接跳转，不带额外参数，播放器会自动选择默认源
+          router.push({ pathname: '/player', params: { itemId: item.id! } });
+        }}
+        style={{
+          paddingVertical: 12,
+          width: '100%',
+          justifyContent: 'center',
+          alignItems: 'center',
+        }}
       >
-        {progressPercent > 0 && (
-          <Animated.View
-            pointerEvents="none"
-            style={[
-              detailViewStyles.playButtonProgressFill,
-              {
-                backgroundColor: accentColor,
-                borderRadius: isLiquidGlassAvailable() ? 999 : 8,
-              },
-              animatedStyle,
-            ]}
-          />
-        )}
-        <TouchableOpacity
-          onPress={handlePlay}
-          style={{
-            paddingVertical: 12,
-            width: '100%',
-            justifyContent: 'center',
-            alignItems: 'center',
-          }}
-        >
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Text style={[detailViewStyles.playButtonText, { color: textColor }]}>
-              {item.runTimeTicks
-                ? formatDurationFromTicks(item.runTimeTicks, { showUnits: true })
-                : '播放'}
-            </Text>
-            <Ionicons name="play-circle" size={24} color={textColor} />
-          </View>
-        </TouchableOpacity>
-      </GlassView>
-    </View>
+        <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+          <Text style={[detailViewStyles.playButtonText, { color: textColor }]}>
+            {item.runTimeTicks
+              ? formatDurationFromTicks(item.runTimeTicks, { showUnits: true })
+              : '播放'}
+          </Text>
+          <Ionicons name="play-circle" size={24} color={textColor} />
+        </View>
+      </TouchableOpacity>
+    </GlassView>
   );
 };
 
@@ -413,35 +213,6 @@ export const ItemInfoList = ({ item }: { item: MediaItem }) => {
     </View>
   );
 };
-
-const styles = StyleSheet.create({
-    optionsContainer: {
-        borderRadius: 12,
-        marginBottom: 16,
-        overflow: 'hidden',
-    },
-    optionRow: {
-        flexDirection: 'row',
-        alignItems: 'center',
-        padding: 12,
-        gap: 12,
-    },
-    optionTextContainer: {
-        flex: 1,
-        gap: 2,
-    },
-    optionTitle: {
-        fontSize: 14,
-        fontWeight: '600',
-    },
-    optionSubtitle: {
-        fontSize: 12,
-    },
-    separator: {
-        height: 1,
-        marginLeft: 44, // 左侧缩进，对齐图标后的文字
-    }
-});
 
 export const detailViewStyles = StyleSheet.create({
   container: {
