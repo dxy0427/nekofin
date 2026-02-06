@@ -46,10 +46,15 @@ export type DandanComment = {
   user: string;
 };
 
-const BASE_URL = process.env.EXPO_PUBLIC_DANDANPLAY_API_URL;
+// 移除 process.env.EXPO_PUBLIC_DANDANPLAY_API_URL
 
-async function makeRequest<T>(endpoint: string, params?: Record<string, any>): Promise<T> {
-  const url = new URL(`${BASE_URL}${endpoint}`);
+// 修改 makeRequest，第一个参数改为 baseUrl
+async function makeRequest<T>(baseUrl: string, endpoint: string, params?: Record<string, any>): Promise<T> {
+  if (!baseUrl) {
+    throw new Error('未设置弹幕源地址');
+  }
+
+  const url = new URL(`${baseUrl}${endpoint}`);
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
       url.searchParams.append(key, String(value));
@@ -70,21 +75,22 @@ async function makeRequest<T>(endpoint: string, params?: Record<string, any>): P
   return response.json();
 }
 
-export async function searchAnimesByKeyword(keyword: string): Promise<DandanAnime[]> {
-  const res = await makeRequest<DandanSearchResult>('/api/v2/search/episodes', {
+// 修改所有导出函数，增加 baseUrl 参数
+export async function searchAnimesByKeyword(baseUrl: string, keyword: string): Promise<DandanAnime[]> {
+  const res = await makeRequest<DandanSearchResult>(baseUrl, '/api/v2/search/episodes', {
     anime: keyword,
   });
 
   return res?.animes ?? [];
 }
 
-export async function searchEpisodesByKeyword(keyword: string): Promise<DandanEpisode[]> {
-  const animes = await searchAnimesByKeyword(keyword);
+export async function searchEpisodesByKeyword(baseUrl: string, keyword: string): Promise<DandanEpisode[]> {
+  const animes = await searchAnimesByKeyword(baseUrl, keyword);
   return (animes ?? []).flatMap((anime) => anime.episodes);
 }
 
-export async function getCommentsByEpisodeId(episodeId: number): Promise<DandanComment[]> {
-  const res = await makeRequest<DandanCommentResult>(`/api/v2/comment/${episodeId}`, {
+export async function getCommentsByEpisodeId(baseUrl: string, episodeId: number): Promise<DandanComment[]> {
+  const res = await makeRequest<DandanCommentResult>(baseUrl, `/api/v2/comment/${episodeId}`, {
     withRelated: true,
     chConvert: 1,
     protect: 1,
