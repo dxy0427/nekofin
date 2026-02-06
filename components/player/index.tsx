@@ -171,14 +171,16 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   });
 
   const allSubs = useMemo(() => {
+    // 聚合服务端返回的字幕信息，优先外挂字幕
     return (
-      streamInfo?.mediaSource?.MediaStreams?.filter((sub) => sub.type === 'Subtitle' || sub.type === 'Subtitle' || sub.Type === 'Subtitle').sort(
-        (a, b) => Number(a.IsExternal) - Number(b.IsExternal),
-      ) || []
+      streamInfo?.mediaSource?.MediaStreams?.filter(
+        (sub) => sub.type === 'Subtitle' || sub.type === 'Subtitle' || sub.Type === 'Subtitle',
+      ).sort((a, b) => Number(a.IsExternal) - Number(b.IsExternal)) || []
     );
   }, [streamInfo?.mediaSource?.MediaStreams]);
 
   const externalSubtitles = useMemo(() => {
+    // 过滤出外挂字幕，传递给播放器
     const subs = allSubs
       .filter((sub) => sub.IsExternal || sub.DeliveryMethod === 'External')
       .map((sub) => ({
@@ -274,7 +276,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     })();
   }, [isPlaying]);
 
-  // 加载音轨和字幕轨逻辑更新
+  // 关键修复：在播放器加载后获取真实的音轨和字幕轨道列表
   useEffect(() => {
     if (!player.current || !isLoaded) return;
 
@@ -409,7 +411,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
           onVideoProgress={(e) => {
             const { duration, currentTime: newCurrentTime } = e.nativeEvent;
 
-            // 第一次收到进度更新时，标记已加载
+            // 第一次收到进度更新时，标记已加载，这会触发上方 useEffect 获取轨道
             if (!isLoaded) setIsLoaded(true);
 
             setMediaInfo({
