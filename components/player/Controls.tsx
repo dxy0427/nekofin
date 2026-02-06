@@ -1,6 +1,6 @@
-import { MediaStats, MediaTrack, MediaTracks } from '@/modules/vlc-player';
+import { MediaStats, MediaTracks } from '@/modules/vlc-player';
 import { DandanComment } from '@/services/dandanplay';
-import { MediaItem, MediaSource, MediaStream } from '@/services/media/types';
+import { MediaItem } from '@/services/media/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SharedValue, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -23,17 +23,6 @@ type ControlsProps = {
   onRateChange?: (newRate: number | null, options?: { remember?: boolean }) => void;
   rate: number;
   tracks?: MediaTracks;
-  
-  selectedAudioTrackIndex?: number;
-  selectedSubtitleTrackIndex?: number;
-
-  onAudioTrackChange?: (trackIndex: number) => void;
-  onSubtitleTrackChange?: (trackIndex: number) => void;
-  
-  hasPreviousEpisode?: boolean;
-  hasNextEpisode?: boolean;
-  onPreviousEpisode?: () => void;
-  onNextEpisode?: () => void;
   mediaStats?: MediaStats | null;
   onCommentsLoaded?: (
     comments: DandanComment[],
@@ -44,10 +33,6 @@ type ControlsProps = {
   episodes: MediaItem[];
   currentItem?: MediaItem | null;
   onEpisodeSelect: (episodeId: string) => void;
-  mediaSources: MediaSource[];
-  currentMediaSourceId: string | null;
-  onMediaSourceChange: (sourceId: string) => void;
-  subtitleStreams: MediaStream[];
 };
 
 export function Controls({
@@ -61,14 +46,6 @@ export function Controls({
   onRateChange,
   rate,
   tracks,
-  selectedAudioTrackIndex,
-  selectedSubtitleTrackIndex,
-  onAudioTrackChange,
-  onSubtitleTrackChange,
-  hasPreviousEpisode,
-  hasNextEpisode,
-  onPreviousEpisode,
-  onNextEpisode,
   mediaStats,
   onCommentsLoaded,
   danmakuEpisodeInfo,
@@ -76,10 +53,6 @@ export function Controls({
   episodes,
   currentItem,
   onEpisodeSelect,
-  mediaSources,
-  currentMediaSourceId,
-  onMediaSourceChange,
-  subtitleStreams = [], // 确保默认值
 }: ControlsProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showControls, setShowControls] = useState(false);
@@ -158,14 +131,6 @@ export function Controls({
     onRateChange,
     rate,
     tracks,
-    selectedAudioTrackIndex,
-    selectedSubtitleTrackIndex,
-    onAudioTrackChange,
-    onSubtitleTrackChange,
-    hasPreviousEpisode,
-    hasNextEpisode,
-    onPreviousEpisode,
-    onNextEpisode,
     mediaStats: mediaStats ?? null,
     showControls,
     setShowControls,
@@ -187,10 +152,6 @@ export function Controls({
     isMovie: currentItem?.type === 'Movie',
     episodeListDrawerRef,
     onEpisodeSelect,
-    mediaSources,
-    currentMediaSourceId,
-    onMediaSourceChange,
-    subtitleStreams,
   };
 
   return (
