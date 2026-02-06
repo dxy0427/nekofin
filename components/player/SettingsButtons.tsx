@@ -22,6 +22,8 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
     rate,
     setMenuOpen,
     onCommentsLoaded,
+    title,
+    currentItem, // 获取当前播放的 item 对象
   } = usePlayer();
 
   const danmakuSearchModalRef = useRef<DanmakuSearchModalRef>(null);
@@ -52,8 +54,17 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
   }, [danmakuSettings, setDanmakuSettings]);
 
   const handleDanmakuSearch = useCallback(() => {
-    danmakuSearchModalRef.current?.present();
-  }, []);
+    let keyword = '';
+    // 优先使用 SeriesName (番剧名)，如果是电影则用 Name
+    if (currentItem) {
+      keyword = currentItem.seriesName || currentItem.name || '';
+    } else if (title) {
+      // 如果没有 item 对象（不太可能），尝试从标题字符串提取
+      // 假设标题格式为 "番剧名 S01E01 - 标题"，取 S 之前的部分
+      keyword = title.split(' S')[0];
+    }
+    danmakuSearchModalRef.current?.present(keyword);
+  }, [currentItem, title]);
 
   const handleCommentsLoaded = useCallback(
     (comments: DandanComment[], episodeInfo?: { animeTitle: string; episodeTitle: string }) => {
@@ -122,7 +133,6 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
         onCloseMenu={() => setMenuOpen(false)}
         title="字幕选择"
         actions={[
-          // 内置字幕选项
           ...(subtitleTracks.length > 0
             ? [
                 createMenuAction('subtitle_-1', '关闭字幕', selectedTracks?.subtitle?.index, -1),
