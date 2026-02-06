@@ -1,4 +1,6 @@
 import { useDanmakuSettings } from '@/lib/contexts/DanmakuSettingsContext';
+import { formatBitrate, formatFileSize } from '@/lib/utils'; // 确保 utils 里有 formatFileSize
+import { getItemDownloadUrl } from '@/lib/utils/items'; // 只是用类型
 import { DandanComment } from '@/services/dandanplay';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { MenuView } from '@react-native-menu/menu';
@@ -12,10 +14,18 @@ type SettingsButtonsProps = {
   style?: StyleProp<ViewStyle>;
 };
 
+// 简单的辅助函数，格式化文件大小
+const formatSize = (bytes?: number | null) => {
+    if (!bytes) return '';
+    const sizes = ['Bytes', 'KB', 'MB', 'GB', 'TB'];
+    if (bytes === 0) return '0 Byte';
+    const i = Math.floor(Math.log(bytes) / Math.log(1024));
+    return `${(bytes / Math.pow(1024, i)).toFixed(1)} ${sizes[i]}`;
+};
+
 export function SettingsButtons({ style }: SettingsButtonsProps) {
   const {
     tracks,
-    selectedTracks,
     onAudioTrackChange,
     onSubtitleTrackChange,
     onRateChange,
@@ -23,16 +33,30 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
     setMenuOpen,
     onCommentsLoaded,
     title,
-    currentItem, // 获取当前播放的 item 对象
+    currentItem,
+    mediaSources,
+    currentMediaSourceId,
+    onMediaSourceChange,
+    subtitleStreams, // 使用 API 提供的字幕列表
+    selectedSubtitleTrackIndex,
+    selectedAudioTrackIndex,
   } = usePlayer();
 
   const danmakuSearchModalRef = useRef<DanmakuSearchModalRef>(null);
-  const { settings: danmakuSettings, setSettings: setDanmakuSettings } = useDanmakuSettings();
+  const { settings: danmakuSettings, setDanmakuToggle } = useDanmakuSettings();
+  // 注意：useDanmakuSettings 返回的 toggle 方法可能在 Context 更新里没加，这里直接操作 settings 
+  const { settings, setSettings } = useDanmakuSettings();
 
   const audioTracks =
     tracks?.audio?.filter((track) => track.index !== -1).sort((a, b) => a.index - b.index) ?? [];
-  const subtitleTracks =
-    tracks?.subtitle?.filter((track) => track.index !== -1).sort((a, b) => a.index - b.index) ?? [];
+  
+  // 处理字幕列表：API 返回的列表
+  const formattedSubtitleTracks = subtitleStreams.map((sub) => ({
+      id: sub.index,
+      title: sub.title || sub.language || `Track ${sub.index}`,
+      isDefault: sub.isDefault,
+      type: sub.codec // 显示格式，如 ass, subrip
+  }));
 
   const handleAudioTrackSelect = (trackIndex: number) => {
     onAudioTrackChange?.(trackIndex);
@@ -46,21 +70,22 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
     onRateChange?.(newRate);
   };
 
+  const handleVersionSelect = (sourceId: string) => {
+    onMediaSourceChange?.(sourceId);
+  };
+
   const handleDanmakuToggle = useCallback(() => {
-    setDanmakuSettings({
-      ...danmakuSettings,
-      danmakuFilter: danmakuSettings.danmakuFilter === 15 ? 0 : 15,
+    setSettings({
+      ...settings,
+      danmakuFilter: settings.danmakuFilter === 15 ? 0 : 15,
     });
-  }, [danmakuSettings, setDanmakuSettings]);
+  }, [settings, setSettings]);
 
   const handleDanmakuSearch = useCallback(() => {
     let keyword = '';
-    // 优先使用 SeriesName (番剧名)，如果是电影则用 Name
     if (currentItem) {
       keyword = currentItem.seriesName || currentItem.name || '';
     } else if (title) {
-      // 如果没有 item 对象（不太可能），尝试从标题字符串提取
-      // 假设标题格式为 "番剧名 S01E01 - 标题"，取 S 之前的部分
       keyword = title.split(' S')[0];
     }
     danmakuSearchModalRef.current?.present(keyword);
@@ -73,9 +98,10 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
     [onCommentsLoaded],
   );
 
-  const createMenuAction = <T,>(id: string, title: string, currentValue: T, targetValue: T) => ({
+  const createMenuAction = <T,>(id: string, title: string, currentValue: T, targetValue: T, subtitle?: string) => ({
     id,
     title,
+    subtitle,
     state: currentValue === targetValue ? ('on' as const) : ('off' as const),
   });
 
@@ -84,6 +110,49 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
 
   return (
     <View style={[styles.row, style]}>
+      {/* 版本选择菜单 */}
+      {mediaSources.length > 1 && (
+        <MenuView
+          isAnchoredToRight
+          onPressAction={({ nativeEvent }) => {
+            const key = nativeEvent.event;
+            if (key.startsWith('source_')) {
+              const sourceId = key.replace('source_', '');
+              handleVersionSelect(sourceId);
+            }
+            setMenuOpen(false);
+          }}
+          onOpenMenu={() => setMenuOpen(true)}
+          onCloseMenu={() => setMenuOpen(false)}
+          title="版本选择"
+          actions={mediaSources.map((source) => {
+            // 构建详细的版本信息字符串
+            // 格式：1080p.Container.Codec / Size / Bitrate
+            const height = source.mediaStreams.find(s => s.type === 'Video')?.height;
+            const res = height ? `${height}p` : 'Unknown';
+            const container = source.container || '';
+            const codec = source.mediaStreams.find(s => s.type === 'Video')?.codec?.toUpperCase() || '';
+            const size = formatSize(source.size);
+            const bitrate = source.bitrate ? formatBitrate(source.bitrate) : '';
+            
+            const label = `${res}.${container}.${codec} / ${size} / ${bitrate}`;
+            
+            return createMenuAction(
+              `source_${source.id}`,
+              source.name || 'Version', // 这里的 Name 往往是简单的，所以我们把详细信息放在 subtitle 或 title 拼接
+              currentMediaSourceId,
+              source.id,
+              label // iOS 菜单支持 subtitle
+            );
+          })}
+        >
+          <TouchableOpacity style={styles.circleButton}>
+            <Ionicons name="layers" size={24} color="white" />
+          </TouchableOpacity>
+        </MenuView>
+      )}
+
+      {/* 音轨选择 */}
       <MenuView
         isAnchoredToRight
         onPressAction={({ nativeEvent }) => {
@@ -103,7 +172,7 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
                 createMenuAction(
                   `audio_${track.index}`,
                   track.name,
-                  selectedTracks?.audio?.index,
+                  selectedAudioTrackIndex, // 使用 Context 中的选中状态
                   track.index,
                 ),
               )
@@ -119,6 +188,7 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
         </TouchableOpacity>
       </MenuView>
 
+      {/* 字幕选择 - 使用 API 数据 */}
       <MenuView
         isAnchoredToRight
         onPressAction={({ nativeEvent }) => {
@@ -133,30 +203,30 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
         onCloseMenu={() => setMenuOpen(false)}
         title="字幕选择"
         actions={[
-          ...(subtitleTracks.length > 0
-            ? [
-                createMenuAction('subtitle_-1', '关闭字幕', selectedTracks?.subtitle?.index, -1),
-                ...subtitleTracks.map((track) =>
-                  createMenuAction(
-                    `subtitle_${track.index}`,
-                    track.name,
-                    selectedTracks?.subtitle?.index,
-                    track.index,
-                  ),
+          createMenuAction('subtitle_-1', '关闭字幕', selectedSubtitleTrackIndex, -1),
+          ...(formattedSubtitleTracks.length > 0
+            ? formattedSubtitleTracks.map((track) =>
+                createMenuAction(
+                  `subtitle_${track.id}`,
+                  track.title,
+                  selectedSubtitleTrackIndex,
+                  track.id,
+                  track.type ? `格式: ${track.type.toUpperCase()}` : undefined // 显示格式信息
                 ),
-              ]
+              )
             : [{ id: 'no_subtitle', title: '无可用字幕', state: 'off' as const }]),
         ]}
       >
-        <TouchableOpacity style={styles.circleButton} disabled={subtitleTracks.length === 0}>
+        <TouchableOpacity style={styles.circleButton} disabled={formattedSubtitleTracks.length === 0}>
           <Ionicons
             name="chatbox-ellipses"
             size={24}
-            color={subtitleTracks.length === 0 ? '#666' : 'white'}
+            color={formattedSubtitleTracks.length === 0 ? '#666' : 'white'}
           />
         </TouchableOpacity>
       </MenuView>
 
+      {/* 播放速度 */}
       <MenuView
         isAnchoredToRight
         onPressAction={({ nativeEvent }) => {
@@ -177,6 +247,7 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
         </TouchableOpacity>
       </MenuView>
 
+      {/* 弹幕设置 */}
       <MenuView
         isAnchoredToRight
         onPressAction={({ nativeEvent }) => {
@@ -194,7 +265,7 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
         actions={[
           {
             id: 'danmaku_toggle',
-            title: danmakuSettings.danmakuFilter === 15 ? '开启弹幕' : '关闭弹幕',
+            title: settings.danmakuFilter === 15 ? '开启弹幕' : '关闭弹幕',
           },
           { id: 'danmaku_search', title: '搜索弹幕' },
         ]}
