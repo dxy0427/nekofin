@@ -790,14 +790,8 @@ export class EmbyAdapter implements MediaAdapter {
       qs.set('static', 'true');
       qs.set('container', 'mp4');
       qs.set('mediaSourceId', mediaSource?.Id || '');
-      
-      // 注意：直接播放时，通常不应传递 subtitleStreamIndex 给 URL，
-      // 因为这可能导致 Emby 强制烧录。对于原生播放器，我们希望客户端自己挂载字幕。
-      // 只有在转码时（即 mediaSource.TranscodingUrl 存在时）才由服务端处理字幕。
-      // 这里如果选择了字幕但 URL 是 DirectPlay，我们不将 index 放入 URL，
-      // 而是依赖客户端(VLC)的 setSubtitleTrack 方法。
-      // 除非我们需要强制烧录，但在本适配器中暂未处理强制烧录逻辑。
-      
+      if (typeof subtitleStreamIndex === 'number')
+        qs.set('subtitleStreamIndex', String(subtitleStreamIndex));
       if (typeof audioStreamIndex === 'number')
         qs.set('audioStreamIndex', String(audioStreamIndex));
       if (deviceId) qs.set('deviceId', deviceId);
@@ -813,7 +807,6 @@ export class EmbyAdapter implements MediaAdapter {
   }
 
   async addFavoriteItem({ userId, itemId }: UpdateFavoriteItemParams): Promise<void> {
-    // 修复：POST 需要 body
     await getEmbyApiClient().post(`/Users/${userId}/FavoriteItems/${itemId}`, {});
   }
 
@@ -824,7 +817,7 @@ export class EmbyAdapter implements MediaAdapter {
   async markItemPlayed({ userId, itemId, datePlayed }: MarkItemPlayedParams): Promise<void> {
     const qs = new URLSearchParams();
     if (datePlayed) qs.set('DatePlayed', datePlayed);
-    // 修复：POST 需要 body
+    // 关键修复：添加空对象 {} 作为请求体，否则 Emby 可能会报错或忽略请求
     await getEmbyApiClient().post(`/Users/${userId}/PlayedItems/${itemId}?${qs.toString()}`, {});
   }
 
@@ -838,7 +831,7 @@ export class EmbyAdapter implements MediaAdapter {
     isPaused,
     PlaySessionId,
   }: ReportPlaybackProgressParams): Promise<void> {
-    // 修复：移除 /emby 前缀
+    // 关键修复：添加 EventName: 'TimeUpdate'
     await getEmbyApiClient().post(`/Sessions/Playing/Progress`, {
       ItemId: itemId,
       PositionTicks: Math.floor(positionTicks * 10000),
@@ -846,6 +839,7 @@ export class EmbyAdapter implements MediaAdapter {
       CanSeek: true,
       PlaybackStartTimeTicks: Date.now() * 10000,
       PlaySessionId,
+      EventName: 'TimeUpdate',
     });
   }
 
@@ -854,7 +848,6 @@ export class EmbyAdapter implements MediaAdapter {
     positionTicks,
     PlaySessionId,
   }: ReportPlaybackStartParams): Promise<void> {
-    // 修复：移除 /emby 前缀
     await getEmbyApiClient().post(`/Sessions/Playing`, {
       ItemId: itemId,
       PositionTicks: Math.floor((positionTicks ?? 0) * 10000),
@@ -869,7 +862,6 @@ export class EmbyAdapter implements MediaAdapter {
     positionTicks,
     PlaySessionId,
   }: ReportPlaybackStopParams): Promise<void> {
-    // 修复：移除 /emby 前缀
     await getEmbyApiClient().post(`/Sessions/Playing/Stopped`, {
       ItemId: itemId,
       PositionTicks: Math.floor(positionTicks * 10000),
