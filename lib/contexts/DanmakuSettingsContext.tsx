@@ -36,7 +36,6 @@ type DanmakuSettingsContextValue = {
   getActiveSource: () => DanmakuSource | undefined;
 };
 
-// 默认设置，初始源列表为空，或者你可以保留一个示例
 export const defaultSettings: DanmakuSettingsType = {
   opacity: 0.8,
   speed: 140,
@@ -48,8 +47,14 @@ export const defaultSettings: DanmakuSettingsType = {
   curEpOffset: 0,
   fontFamily: '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif',
   fontWeight: '700',
-  sources: [], 
-  activeSourceId: '',
+  sources: [
+    {
+      id: 'default_dandan',
+      name: '弹弹Play官方',
+      url: 'https://api.dandanplay.net',
+    },
+  ],
+  activeSourceId: 'default_dandan',
 };
 
 const DanmakuSettingsContext = createContext<DanmakuSettingsContextValue | null>(null);
@@ -63,8 +68,8 @@ export function DanmakuSettingsProvider({ children }: { children: React.ReactNod
       if (!parsed.sources) {
         return {
           ...parsed,
-          sources: [],
-          activeSourceId: '',
+          sources: defaultSettings.sources,
+          activeSourceId: defaultSettings.activeSourceId,
         };
       }
       return parsed;
@@ -72,7 +77,6 @@ export function DanmakuSettingsProvider({ children }: { children: React.ReactNod
     return defaultSettings;
   });
 
-  // 监听设置变化并持久化
   useEffect(() => {
     storage.set('danmakuSettings', JSON.stringify(settings));
   }, [settings]);
@@ -80,12 +84,12 @@ export function DanmakuSettingsProvider({ children }: { children: React.ReactNod
   const addSource = (name: string, url: string) => {
     const id = uuid.v4() as string;
     const cleanUrl = url.replace(/\/$/, ''); // 去除末尾斜杠
-    
+
     setSettings((prev) => {
       const newSource = { id, name, url: cleanUrl };
-      // 如果是第一个添加的源，自动设为选中
+      // 如果是列表为空，添加后自动选中
       const newActiveId = prev.sources.length === 0 ? id : prev.activeSourceId;
-      
+
       return {
         ...prev,
         sources: [...prev.sources, newSource],
@@ -136,7 +140,7 @@ export function DanmakuSettingsProvider({ children }: { children: React.ReactNod
       setActiveSource,
       getActiveSource,
     }),
-    [settings]
+    [settings],
   );
 
   return (
