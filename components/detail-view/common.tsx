@@ -68,7 +68,6 @@ export const PlayButton = ({ item }: { item: MediaItem }) => {
       )}
       <TouchableOpacity
         onPress={() => {
-          // 简单直接跳转，不带额外参数，播放器会自动选择默认源
           router.push({ pathname: '/player', params: { itemId: item.id! } });
         }}
         style={{
