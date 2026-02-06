@@ -32,7 +32,7 @@ type DanmakuSearchModalProps = {
 type SearchStep = 'anime' | 'episode';
 
 export interface DanmakuSearchModalRef {
-  present: () => void;
+  present: (initialKeyword?: string) => void;
   dismiss: () => void;
 }
 
@@ -55,9 +55,38 @@ export const DanmakuSearchModal = ({ onCommentsLoaded, ref }: DanmakuSearchModal
 
   const bottomSheetModalRef = useRef<BottomSheetModal>(null);
 
-  const present = useCallback(() => {
-    bottomSheetModalRef.current?.present();
-  }, []);
+  const present = useCallback(
+    (initialKeyword?: string) => {
+      setSearchStep('anime');
+      setAnimes([]);
+      setEpisodes([]);
+      setSelectedAnime(null);
+      setLoading(false);
+
+      if (initialKeyword) {
+        setSearchKeyword(initialKeyword);
+        // 如果有初始关键词且配置了源，自动触发搜索
+        if (baseUrl) {
+          setLoading(true);
+          searchAnimesByKeyword(baseUrl, initialKeyword)
+            .then((results) => {
+              setAnimes(results);
+            })
+            .catch(() => {
+              // 自动搜索失败暂不弹窗，让用户手动重试
+            })
+            .finally(() => {
+              setLoading(false);
+            });
+        }
+      } else {
+        setSearchKeyword('');
+      }
+
+      bottomSheetModalRef.current?.present();
+    },
+    [baseUrl],
+  );
 
   const dismiss = useCallback(() => {
     bottomSheetModalRef.current?.dismiss();
@@ -198,6 +227,7 @@ export const DanmakuSearchModal = ({ onCommentsLoaded, ref }: DanmakuSearchModal
             ]}
             placeholder={searchStep === 'anime' ? '输入番剧名称' : '剧集列表'}
             placeholderTextColor={`${String(textColor)}80`}
+            value={searchKeyword}
             onChangeText={setSearchKeyword}
             onSubmitEditing={handleSearch}
             editable={searchStep === 'anime'}
@@ -205,6 +235,14 @@ export const DanmakuSearchModal = ({ onCommentsLoaded, ref }: DanmakuSearchModal
             autoCorrect={false}
             ref={textInputRef}
           />
+          {searchKeyword.length > 0 && (
+            <TouchableOpacity
+              style={styles.clearButton}
+              onPress={() => setSearchKeyword('')}
+            >
+              <Ionicons name="close-circle" size={16} color="#999" />
+            </TouchableOpacity>
+          )}
           <TouchableOpacity
             style={[
               styles.searchButton,
@@ -248,6 +286,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     padding: 16,
     gap: 12,
+    alignItems: 'center',
   },
   searchInput: {
     flex: 1,
@@ -256,6 +295,12 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 10,
     fontSize: 16,
+    paddingRight: 30, // 留出清除按钮的空间
+  },
+  clearButton: {
+    position: 'absolute',
+    right: 80, // 根据searchButton的宽度调整
+    padding: 8,
   },
   searchButton: {
     borderRadius: 8,
