@@ -33,8 +33,8 @@ const LoadingIndicator = ({ title }: { title?: string }) => {
 };
 
 export const VideoPlayer = ({ itemId }: { itemId: string }) => {
-  // 接收从详情页传来的参数
-  const { mediaSourceId, audioStreamIndex, subtitleStreamIndex } = useLocalSearchParams<{
+  // 接收从详情页传来的选择参数 (字符串类型)
+  const params = useLocalSearchParams<{
     mediaSourceId?: string;
     audioStreamIndex?: string;
     subtitleStreamIndex?: string;
@@ -43,7 +43,8 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const { currentServer } = useMediaServers();
   const router = useRouter();
   const mediaAdapter = useMediaAdapter();
-  const { settings, getActiveSource } = useDanmakuSettings();
+  const { settings } = useDanmakuSettings();
+  const { getActiveSource } = useDanmakuSettings();
   const activeSource = getActiveSource();
   const danmakuBaseUrl = activeSource?.url || '';
 
@@ -134,9 +135,9 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       maxBitrate,
       enableSubtitleBurnIn,
       selectedCodec,
-      mediaSourceId, // 依赖参数
-      subtitleStreamIndex, // 依赖参数
-      audioStreamIndex, // 依赖参数
+      params.mediaSourceId,
+      params.audioStreamIndex,
+      params.subtitleStreamIndex,
     ],
     queryFn: async () => {
       if (!currentServer || !itemDetail) return null;
@@ -146,10 +147,10 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
         userId: currentServer.userId,
         startTimeTicks: itemDetail.userData?.playbackPositionTicks || 0,
         deviceId: getDeviceId(),
-        // 传入选择的参数
-        mediaSourceId: mediaSourceId ?? undefined,
-        audioStreamIndex: audioStreamIndex ? parseInt(audioStreamIndex) : undefined,
-        subtitleStreamIndex: subtitleStreamIndex ? parseInt(subtitleStreamIndex) : undefined,
+        // 传递详情页选择的参数
+        mediaSourceId: params.mediaSourceId || undefined,
+        audioStreamIndex: params.audioStreamIndex ? parseInt(params.audioStreamIndex, 10) : undefined,
+        subtitleStreamIndex: params.subtitleStreamIndex ? parseInt(params.subtitleStreamIndex, 10) : undefined,
       };
 
       if (!enableTranscoding) {
@@ -285,6 +286,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
 
   return (
     <View style={styles.container}>
+      {/* 确保 streamInfo.url 存在且 initialTime 已设定才渲染播放器 */}
       {streamInfo?.url && initialTime >= 0 && (
         <VlcPlayerView
           ref={player}
