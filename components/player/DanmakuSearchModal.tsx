@@ -1,5 +1,6 @@
 import { BottomSheetBackdropModal } from '@/components/BottomSheetBackdropModal';
 import { useThemeColor } from '@/hooks/useThemeColor';
+import { useDanmakuSettings } from '@/lib/contexts/DanmakuSettingsContext';
 import {
   DandanAnime,
   DandanComment,
@@ -44,6 +45,10 @@ export const DanmakuSearchModal = ({ onCommentsLoaded, ref }: DanmakuSearchModal
   const [loading, setLoading] = useState(false);
   const textInputRef = useRef<TextInput>(null);
 
+  const { getActiveSource } = useDanmakuSettings();
+  const activeSource = getActiveSource();
+  const baseUrl = activeSource?.url || '';
+
   const textColor = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
   const backgroundColor = useThemeColor({ light: '#fff', dark: '#000' }, 'background');
   const borderColor = useThemeColor({ light: '#e0e0e0', dark: '#333' }, 'text');
@@ -71,21 +76,26 @@ export const DanmakuSearchModal = ({ onCommentsLoaded, ref }: DanmakuSearchModal
     textInputRef.current?.blur();
     if (!searchKeyword.trim()) return;
 
+    if (!baseUrl) {
+      Alert.alert('错误', '请先在设置中配置弹幕源');
+      return;
+    }
+
     setLoading(true);
     try {
       if (searchStep === 'anime') {
-        const results = await searchAnimesByKeyword(searchKeyword);
+        const results = await searchAnimesByKeyword(baseUrl, searchKeyword);
         setAnimes(results);
       } else if (searchStep === 'episode' && selectedAnime) {
         const results = selectedAnime.episodes;
         setEpisodes(results);
       }
     } catch (error) {
-      Alert.alert('搜索失败', '请检查网络连接后重试');
+      Alert.alert('搜索失败', '请检查网络连接或弹幕源地址是否正确');
     } finally {
       setLoading(false);
     }
-  }, [searchKeyword, searchStep, selectedAnime]);
+  }, [searchKeyword, searchStep, selectedAnime, baseUrl]);
 
   const handleAnimeSelect = useCallback((anime: DandanAnime) => {
     setSelectedAnime(anime);
@@ -95,9 +105,10 @@ export const DanmakuSearchModal = ({ onCommentsLoaded, ref }: DanmakuSearchModal
 
   const handleEpisodeSelect = useCallback(
     async (episode: DandanEpisode) => {
+      if (!baseUrl) return;
       setLoading(true);
       try {
-        const comments = await getCommentsByEpisodeId(episode.episodeId);
+        const comments = await getCommentsByEpisodeId(baseUrl, episode.episodeId);
         onCommentsLoaded(comments, {
           animeTitle: selectedAnime?.animeTitle ?? '',
           episodeTitle: episode.episodeTitle,
@@ -110,7 +121,7 @@ export const DanmakuSearchModal = ({ onCommentsLoaded, ref }: DanmakuSearchModal
         setLoading(false);
       }
     },
-    [onCommentsLoaded, selectedAnime],
+    [onCommentsLoaded, selectedAnime, baseUrl],
   );
 
   const handleClose = useCallback(() => {
