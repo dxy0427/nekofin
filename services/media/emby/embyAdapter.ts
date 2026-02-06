@@ -807,7 +807,7 @@ export class EmbyAdapter implements MediaAdapter {
   }
 
   async addFavoriteItem({ userId, itemId }: UpdateFavoriteItemParams): Promise<void> {
-    await getEmbyApiClient().post(`/Users/${userId}/FavoriteItems/${itemId}`);
+    await getEmbyApiClient().post(`/Users/${userId}/FavoriteItems/${itemId}`, {});
   }
 
   async removeFavoriteItem({ userId, itemId }: UpdateFavoriteItemParams): Promise<void> {
@@ -817,7 +817,7 @@ export class EmbyAdapter implements MediaAdapter {
   async markItemPlayed({ userId, itemId, datePlayed }: MarkItemPlayedParams): Promise<void> {
     const qs = new URLSearchParams();
     if (datePlayed) qs.set('DatePlayed', datePlayed);
-    await getEmbyApiClient().post(`/Users/${userId}/PlayedItems/${itemId}?${qs.toString()}`);
+    await getEmbyApiClient().post(`/Users/${userId}/PlayedItems/${itemId}?${qs.toString()}`, {});
   }
 
   async markItemUnplayed({ userId, itemId }: UpdateFavoriteItemParams): Promise<void> {
@@ -830,7 +830,7 @@ export class EmbyAdapter implements MediaAdapter {
     isPaused,
     PlaySessionId,
   }: ReportPlaybackProgressParams): Promise<void> {
-    await getEmbyApiClient().post(`/emby/Sessions/Playing/Progress`, {
+    await getEmbyApiClient().post(`/Sessions/Playing/Progress`, {
       ItemId: itemId,
       PositionTicks: Math.floor(positionTicks * 10000),
       IsPaused: isPaused ?? false,
@@ -845,7 +845,7 @@ export class EmbyAdapter implements MediaAdapter {
     positionTicks,
     PlaySessionId,
   }: ReportPlaybackStartParams): Promise<void> {
-    await getEmbyApiClient().post(`/emby/Sessions/Playing`, {
+    await getEmbyApiClient().post(`/Sessions/Playing`, {
       ItemId: itemId,
       PositionTicks: Math.floor((positionTicks ?? 0) * 10000),
       CanSeek: true,
@@ -859,7 +859,7 @@ export class EmbyAdapter implements MediaAdapter {
     positionTicks,
     PlaySessionId,
   }: ReportPlaybackStopParams): Promise<void> {
-    await getEmbyApiClient().post(`/emby/Sessions/Playing/Stopped`, {
+    await getEmbyApiClient().post(`/Sessions/Playing/Stopped`, {
       ItemId: itemId,
       PositionTicks: Math.floor(positionTicks * 10000),
       PlaySessionId,
