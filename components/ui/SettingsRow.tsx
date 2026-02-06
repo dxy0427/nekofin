@@ -11,6 +11,8 @@ export interface SettingsRowProps {
   icon?: keyof typeof Ionicons.glyphMap;
   imageUri?: string;
   onPress?: () => void;
+  // 新增：支持长按回调
+  onLongPress?: () => void;
   showArrow?: boolean;
   leftComponent?: React.ReactNode;
   rightComponent?: React.ReactNode;
@@ -27,6 +29,7 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
   icon,
   imageUri,
   onPress,
+  onLongPress, // 解构出 onLongPress
   showArrow = true,
   leftComponent,
   rightComponent,
@@ -47,7 +50,10 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
         containerStyle,
       ]}
       onPress={onPress}
-      disabled={!onPress}
+      onLongPress={onLongPress} // 绑定长按事件
+      delayLongPress={200} // 设置稍微短一点的延迟，提升手感
+      activeOpacity={0.7}
+      disabled={!onPress && !onLongPress}
     >
       <View style={styles.settingItemLeft}>
         {leftComponent}
@@ -57,9 +63,13 @@ export const SettingsRow: React.FC<SettingsRowProps> = ({
           <Ionicons name={icon} size={24} color={accentColor} style={styles.settingIcon} />
         ) : null}
         <View style={styles.settingTextContainer}>
-          <Text style={[styles.settingTitle, { color: textColor }]}>{title}</Text>
+          <Text style={[styles.settingTitle, { color: textColor }]} numberOfLines={1}>
+            {title}
+          </Text>
           {subtitle ? (
-            <Text style={[styles.settingSubtitle, { color: secondaryTextColor }]}>{subtitle}</Text>
+            <Text style={[styles.settingSubtitle, { color: secondaryTextColor }]} numberOfLines={1}>
+              {subtitle}
+            </Text>
           ) : null}
         </View>
       </View>
@@ -100,6 +110,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     flex: 1,
+    marginRight: 10, // 防止右侧挤压
   },
   settingItemRight: {
     flexDirection: 'row',
@@ -122,7 +133,7 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
   settingSubtitle: {
-    fontSize: 14,
+    fontSize: 13,
     marginTop: 2,
   },
 });
