@@ -88,7 +88,11 @@ export function Controls({
 
   const hideControlsWithDelay = useCallback(() => {
     clearControlsTimeout();
-    if (menuOpen) return;
+
+    if (menuOpen) {
+      return;
+    }
+
     controlsTimeout.current = setTimeout(() => {
       if (
         !isDragging &&
@@ -111,7 +115,9 @@ export function Controls({
 
   useEffect(() => {
     if (menuOpen) {
-      if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
+      if (controlsTimeout.current) {
+        clearTimeout(controlsTimeout.current);
+      }
       setShowControls(true);
     } else {
       hideControlsWithDelay();
@@ -120,7 +126,9 @@ export function Controls({
 
   useEffect(() => {
     return () => {
-      if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
+      if (controlsTimeout.current) {
+        clearTimeout(controlsTimeout.current);
+      }
     };
   }, []);
 
