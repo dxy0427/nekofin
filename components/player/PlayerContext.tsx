@@ -16,12 +16,10 @@ export type PlayerContextValue = {
   onPlayPause: () => void;
   onRateChange?: (newRate: number | null, options?: { remember?: boolean }) => void;
   rate: number;
-  
   tracks?: MediaTracks;
   selectedTracks?: MediaTrack;
   onAudioTrackChange?: (trackIndex: number) => void;
   onSubtitleTrackChange?: (trackIndex: number) => void;
-  
   hasPreviousEpisode?: boolean;
   hasNextEpisode?: boolean;
   onPreviousEpisode?: () => void;
@@ -47,6 +45,7 @@ export type PlayerContextValue = {
   danmakuEpisodeInfo?: { animeTitle: string; episodeTitle: string } | undefined;
   danmakuComments: DandanComment[];
 
+  // Episode list related
   episodes: MediaItem[];
   currentItem?: MediaItem | null;
   isMovie: boolean;
