@@ -171,7 +171,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   });
 
   const allSubs = useMemo(() => {
-    // 聚合服务端返回的字幕信息，优先外挂字幕
     return (
       streamInfo?.mediaSource?.MediaStreams?.filter(
         (sub) => sub.type === 'Subtitle' || sub.type === 'Subtitle' || sub.Type === 'Subtitle',
@@ -180,7 +179,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   }, [streamInfo?.mediaSource?.MediaStreams]);
 
   const externalSubtitles = useMemo(() => {
-    // 过滤出外挂字幕，传递给播放器
     const subs = allSubs
       .filter((sub) => sub.IsExternal || sub.DeliveryMethod === 'External')
       .map((sub) => ({
@@ -190,11 +188,13 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     return subs;
   }, [allSubs, currentApi?.basePath]);
 
+  // 关键修复：传递 isPlaying，确保播放开始时触发 SessionStart
   const { syncPlaybackProgress } = usePlaybackSync({
     currentServer,
     itemDetail: itemDetail ?? null,
     currentTime,
     playSessionId: streamInfo?.sessionId ?? null,
+    isPlaying: isPlaying, 
   });
 
   const { data: episodes = [] } = useQuery({
@@ -276,13 +276,11 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     })();
   }, [isPlaying]);
 
-  // 关键修复：在播放器加载后获取真实的音轨和字幕轨道列表
   useEffect(() => {
     if (!player.current || !isLoaded) return;
 
     const fetchTracks = async () => {
       try {
-        // 从 VLC 获取实际的轨道列表（包含了内封和外挂）
         const audioTracks = await player.current?.getAudioTracks();
         const subtitleTracks = await player.current?.getSubtitleTracks();
 
@@ -296,7 +294,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       }
     };
 
-    // 延迟一点获取，确保 VLC 已经准备好
     const timer = setTimeout(fetchTracks, 500);
     return () => clearTimeout(timer);
   }, [player, isLoaded]);
@@ -351,7 +348,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
 
   const handleSubtitleTrackChange = useCallback(
     (trackIndex: number) => {
-      // 客户端切换字幕，不再触发流重载
       setSelectedTracks((prev) => ({
         ...prev,
         subtitle: tracks?.subtitle?.find((track) => track.index === trackIndex),
@@ -411,7 +407,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
           onVideoProgress={(e) => {
             const { duration, currentTime: newCurrentTime } = e.nativeEvent;
 
-            // 第一次收到进度更新时，标记已加载，这会触发上方 useEffect 获取轨道
             if (!isLoaded) setIsLoaded(true);
 
             setMediaInfo({
