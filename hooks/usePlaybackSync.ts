@@ -1,5 +1,5 @@
 import { MediaItem, MediaServerInfo } from '@/services/media/types';
-import { useCallback, useEffect } from 'react';
+import { useCallback, useEffect, useRef } from 'react';
 import { SharedValue } from 'react-native-reanimated';
 
 import { useMediaAdapter } from './useMediaAdapter';
@@ -9,6 +9,7 @@ interface UsePlaybackSyncProps {
   itemDetail: MediaItem | null;
   currentTime: SharedValue<number>;
   playSessionId: string | null;
+  isPlaying: boolean; // 新增：必须传入播放状态
 }
 
 export const usePlaybackSync = ({
@@ -16,8 +17,10 @@ export const usePlaybackSync = ({
   itemDetail,
   currentTime,
   playSessionId,
+  isPlaying,
 }: UsePlaybackSyncProps) => {
   const mediaAdapter = useMediaAdapter();
+  const hasStartedRef = useRef(false);
 
   const syncPlaybackProgress = useCallback(
     (position: number, isPaused: boolean = false) => {
@@ -62,14 +65,23 @@ export const usePlaybackSync = ({
     [mediaAdapter, currentServer, itemDetail, playSessionId],
   );
 
+  // 关键修复：监听 isPlaying，只在真正开始播放时发送 Start
+  useEffect(() => {
+    if (isPlaying && !hasStartedRef.current && currentServer && itemDetail && playSessionId) {
+      const startPos = currentTime.value;
+      syncPlaybackStart(startPos);
+      hasStartedRef.current = true;
+    }
+  }, [isPlaying, currentServer, itemDetail, playSessionId, syncPlaybackStart]);
+
   useEffect(() => {
     return () => {
-      if (currentServer && itemDetail && playSessionId) {
+      if (currentServer && itemDetail && playSessionId && hasStartedRef.current) {
         const positionTicks = Math.round(currentTime.value);
         syncPlaybackStop(positionTicks);
       }
     };
-  }, [mediaAdapter, currentServer, itemDetail, playSessionId, syncPlaybackStop, currentTime]);
+  }, [mediaAdapter, currentServer, itemDetail, playSessionId, syncPlaybackStop]);
 
   return {
     syncPlaybackProgress,
