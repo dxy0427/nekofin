@@ -28,7 +28,6 @@ export interface EpisodeListDrawerRef {
   dismiss: () => void;
 }
 
-// 单独的组件，避免在 renderItem 内部重复定义导致重绘
 const EpisodeListItem = React.memo(
   ({
     item,
@@ -130,8 +129,12 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
   const handleEpisodePress = useCallback(
     (episode: MediaItem) => {
       if (episode.id) {
-        onEpisodeSelect(episode.id);
         dismiss();
+        // 关键修复：延迟 350ms，等待 Drawer 关闭动画完成后再切换集数
+        // 避免 Native 动画与组件卸载冲突导致的闪退
+        setTimeout(() => {
+           onEpisodeSelect(episode.id);
+        }, 350);
       }
     },
     [onEpisodeSelect, dismiss],
@@ -156,7 +159,6 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
     opacity: opacity.value,
   }));
 
-  // Drawer 只在 open 时渲染内容，减少性能消耗
   if (!open && opacity.value === 0) {
     return null;
   }
@@ -197,7 +199,7 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
               maxToRenderPerBatch={5}
               removeClippedSubviews={true}
               getItemLayout={(data, index) => ({
-                length: 100, // 估算高度
+                length: 100,
                 offset: 100 * index,
                 index,
               })}
