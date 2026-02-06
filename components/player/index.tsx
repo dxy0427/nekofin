@@ -172,7 +172,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
 
   const allSubs = useMemo(() => {
     return (
-      streamInfo?.mediaSource?.MediaStreams?.filter((sub) => sub.Type === 'Subtitle').sort(
+      streamInfo?.mediaSource?.MediaStreams?.filter((sub) => sub.type === 'Subtitle' || sub.type === 'Subtitle' || sub.Type === 'Subtitle').sort(
         (a, b) => Number(a.IsExternal) - Number(b.IsExternal),
       ) || []
     );
@@ -180,9 +180,9 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
 
   const externalSubtitles = useMemo(() => {
     const subs = allSubs
-      .filter((sub) => sub.DeliveryMethod === 'External')
+      .filter((sub) => sub.IsExternal || sub.DeliveryMethod === 'External')
       .map((sub) => ({
-        name: sub.DisplayTitle ?? '',
+        name: sub.DisplayTitle || sub.Title || sub.Language || 'Unknown',
         DeliveryUrl: `${currentApi?.basePath}${sub.DeliveryUrl ?? ''}`,
       }));
     return subs;
@@ -274,45 +274,30 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     })();
   }, [isPlaying]);
 
+  // 加载音轨和字幕轨逻辑更新
   useEffect(() => {
-    if (!player.current) return;
+    if (!player.current || !isLoaded) return;
 
-    (async () => {
+    const fetchTracks = async () => {
       try {
+        // 从 VLC 获取实际的轨道列表（包含了内封和外挂）
         const audioTracks = await player.current?.getAudioTracks();
-        let subtitleTracks = await player.current?.getSubtitleTracks();
-
-        if (
-          streamInfo?.mediaSource?.TranscodingUrl &&
-          subtitleTracks &&
-          subtitleTracks.length > 1
-        ) {
-          subtitleTracks = [subtitleTracks[0], ...subtitleTracks.slice(1).reverse()];
-        }
-
-        let embedSubIndex = 1;
-        const processedSubs = allSubs?.map((sub) => {
-          const shouldIncrement =
-            sub.DeliveryMethod === SubtitleDeliveryMethod.Embed ||
-            sub.DeliveryMethod === SubtitleDeliveryMethod.Hls ||
-            sub.DeliveryMethod === SubtitleDeliveryMethod.External;
-          if (shouldIncrement) embedSubIndex++;
-          return {
-            name: sub.DisplayTitle || 'Undefined Subtitle',
-            index: sub.Index ?? -1,
-          };
-        });
+        const subtitleTracks = await player.current?.getSubtitleTracks();
 
         setTracks((prev) => ({
           ...prev,
           audio: audioTracks ?? [],
-          subtitle: processedSubs.sort((a, b) => a.index - b.index) ?? [],
+          subtitle: subtitleTracks ?? [],
         }));
       } catch (error) {
-        console.error('Error setting tracks:', error);
+        console.error('Error fetching tracks from player:', error);
       }
-    })();
-  }, [player, isLoaded, streamInfo?.mediaSource?.TranscodingUrl, allSubs]);
+    };
+
+    // 延迟一点获取，确保 VLC 已经准备好
+    const timer = setTimeout(fetchTracks, 500);
+    return () => clearTimeout(timer);
+  }, [player, isLoaded]);
 
   const handlePlayPause = useCallback(() => {
     if (isPlaying) {
@@ -364,6 +349,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
 
   const handleSubtitleTrackChange = useCallback(
     (trackIndex: number) => {
+      // 客户端切换字幕，不再触发流重载
       setSelectedTracks((prev) => ({
         ...prev,
         subtitle: tracks?.subtitle?.find((track) => track.index === trackIndex),
@@ -423,7 +409,8 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
           onVideoProgress={(e) => {
             const { duration, currentTime: newCurrentTime } = e.nativeEvent;
 
-            setIsLoaded(true);
+            // 第一次收到进度更新时，标记已加载
+            if (!isLoaded) setIsLoaded(true);
 
             setMediaInfo({
               duration,
