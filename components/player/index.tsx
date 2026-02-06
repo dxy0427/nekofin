@@ -43,7 +43,9 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const { currentServer, currentApi } = useMediaServers();
   const router = useRouter();
   const mediaAdapter = useMediaAdapter();
-  const { settings } = useDanmakuSettings();
+  const { settings, getActiveSource } = useDanmakuSettings();
+  const activeSource = getActiveSource();
+  const danmakuBaseUrl = activeSource?.url || '';
 
   const [mediaInfo, setMediaInfo] = useState<{
     duration: number;
@@ -100,14 +102,14 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const [useManualComments, setUseManualComments] = useState(false);
 
   const { data: autoCommentsData } = useQuery({
-    queryKey: ['comments', itemDetail?.id, seriesInfo?.originalTitle],
+    queryKey: ['comments', itemDetail?.id, seriesInfo?.originalTitle, danmakuBaseUrl],
     queryFn: async () => {
-      if (!itemDetail || !seriesInfo?.originalTitle) {
+      if (!itemDetail || !seriesInfo?.originalTitle || !danmakuBaseUrl) {
         return { comments: [], episodeInfo: undefined };
       }
-      return getCommentsByItem(itemDetail, seriesInfo.originalTitle);
+      return getCommentsByItem(danmakuBaseUrl, itemDetail, seriesInfo.originalTitle);
     },
-    enabled: !!itemDetail && !!seriesInfo?.originalTitle && !useManualComments,
+    enabled: !!itemDetail && !!seriesInfo?.originalTitle && !useManualComments && !!danmakuBaseUrl,
     staleTime: 1000 * 60 * 5,
   });
 
