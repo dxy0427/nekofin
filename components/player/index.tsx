@@ -10,12 +10,18 @@ import {
   ticksToMilliseconds,
   ticksToSeconds,
 } from '@/lib/utils';
-import { MediaStats, MediaTrack, MediaTracks, VlcPlayerView, VlcPlayerViewRef } from '@/modules/vlc-player';
+import {
+  MediaStats,
+  MediaTrack,
+  MediaTracks,
+  VlcPlayerView,
+  VlcPlayerViewRef,
+} from '@/modules/vlc-player';
 import { DandanComment } from '@/services/dandanplay';
 import { SubtitleDeliveryMethod } from '@jellyfin/sdk/lib/generated-client/models';
 import { useQuery } from '@tanstack/react-query';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
-import { useLocalSearchParams, useRouter } from 'expo-router';
+import { useRouter } from 'expo-router';
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { useSharedValue } from 'react-native-reanimated';
@@ -34,11 +40,6 @@ const LoadingIndicator = ({ title }: { title?: string }) => {
 };
 
 export const VideoPlayer = ({ itemId }: { itemId: string }) => {
-  // 不再接收复杂参数，只接收 itemId
-  const { itemId: paramItemId } = useLocalSearchParams<{ itemId: string }>();
-  // 优先使用 prop 传入的 itemId，否则使用 params 的
-  const finalItemId = itemId || paramItemId;
-
   const { currentServer, currentApi } = useMediaServers();
   const router = useRouter();
   const mediaAdapter = useMediaAdapter();
@@ -53,6 +54,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const [isPlaying, setIsPlaying] = useState(false);
   const [isBuffering, setIsBuffering] = useState(true);
   const [isLoaded, setIsLoaded] = useState(false);
+  const [isStopped, setIsStopped] = useState(false);
   const [initialTime, setInitialTime] = useState<number>(-1);
   const [tracks, setTracks] = useState<MediaTracks | undefined>(undefined);
   const [selectedTracks, setSelectedTracks] = useState<MediaTrack | undefined>(undefined);
@@ -74,13 +76,13 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const currentTime = useSharedValue(0);
 
   const { data: itemDetail } = useQuery({
-    queryKey: ['itemDetail', finalItemId, currentServer?.userId],
+    queryKey: ['itemDetail', itemId, currentServer?.userId],
     queryFn: async () => {
       if (!currentServer) return null;
-      const data = await mediaAdapter.getItemDetail({ itemId: finalItemId, userId: currentServer.userId });
+      const data = await mediaAdapter.getItemDetail({ itemId, userId: currentServer.userId });
       return data;
     },
-    enabled: !!finalItemId && !!currentServer,
+    enabled: !!itemId && !!currentServer,
   });
 
   const { data: seriesInfo } = useQuery({
@@ -129,7 +131,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const { data: streamInfo } = useQuery({
     queryKey: [
       'streamInfo',
-      finalItemId,
+      itemId,
       currentServer?.userId,
       enableTranscoding,
       maxBitrate,
@@ -139,55 +141,52 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     queryFn: async () => {
       if (!currentServer || !itemDetail) return null;
 
-      const baseParams = {
-        item: itemDetail,
-        userId: currentServer.userId,
-        startTimeTicks: itemDetail.userData?.playbackPositionTicks || 0,
-        deviceId: getDeviceId(),
-      };
-
       if (!enableTranscoding) {
         return await mediaAdapter.getStreamInfo({
-          ...baseParams,
+          item: itemDetail,
+          userId: currentServer.userId,
           deviceProfile: generateDeviceProfile(),
+          startTimeTicks: itemDetail.userData?.playbackPositionTicks || 0,
+          deviceId: getDeviceId(),
         });
       }
 
       return await mediaAdapter.getStreamInfo({
-        ...baseParams,
+        item: itemDetail,
+        userId: currentServer.userId,
         deviceProfile: generateDeviceProfile({
           transcode: enableTranscoding,
           maxBitrate: maxBitrate,
           subtitleBurnIn: enableSubtitleBurnIn,
           codec: selectedCodec,
         }),
+        startTimeTicks: itemDetail.userData?.playbackPositionTicks || 0,
+        deviceId: getDeviceId(),
         alwaysBurnInSubtitleWhenTranscoding: enableSubtitleBurnIn,
       });
     },
     enabled: !!currentServer && !!itemDetail,
+    staleTime: 0,
+    gcTime: 0,
   });
 
   const allSubs = useMemo(() => {
     return (
-      streamInfo?.mediaSource?.mediaStreams?.filter((sub) => sub.type === 'Subtitle').sort(
-        (a, b) => Number(a.isDefault) - Number(b.isDefault),
+      streamInfo?.mediaSource?.MediaStreams?.filter((sub) => sub.Type === 'Subtitle').sort(
+        (a, b) => Number(a.IsExternal) - Number(b.IsExternal),
       ) || []
     );
-  }, [streamInfo?.mediaSource?.mediaStreams]);
+  }, [streamInfo?.mediaSource?.MediaStreams]);
 
   const externalSubtitles = useMemo(() => {
     const subs = allSubs
-      .filter((sub) => sub.index !== -1) // 简单过滤
+      .filter((sub) => sub.DeliveryMethod === 'External')
       .map((sub) => ({
-        name: sub.title || sub.language || 'Unknown',
-        // 注意：这里需要确保 currentApi.basePath 正确
-        DeliveryUrl: `${currentApi?.basePath}/Videos/${finalItemId}/${streamInfo?.mediaSource?.id}/Subtitles/${sub.index}/0/Stream.${sub.codec}`,
+        name: sub.DisplayTitle ?? '',
+        DeliveryUrl: `${currentApi?.basePath}${sub.DeliveryUrl ?? ''}`,
       }));
-      // 为了稳定性，暂时只返回空，VLC 会自动识别内嵌字幕
-      // 如果 Jellyfin 返回了外挂字幕，通常需要更复杂的处理
-      // 这里恢复为空，避免崩溃
-    return undefined; 
-  }, [allSubs, currentApi?.basePath, finalItemId, streamInfo?.mediaSource?.id]);
+    return subs;
+  }, [allSubs, currentApi?.basePath]);
 
   const { syncPlaybackProgress } = usePlaybackSync({
     currentServer,
@@ -219,28 +218,51 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
 
   const formattedTitle = useMemo(() => {
     if (!itemDetail) return '';
-    const seriesName = itemDetail.seriesName;
+    const seriesName = itemDetail.seriesName ?? '';
     const seasonNumber = itemDetail.parentIndexNumber;
     const episodeNumber = itemDetail.indexNumber;
-    const episodeName = itemDetail.name;
+    const episodeName = itemDetail.name ?? '';
 
     if (seriesName && seasonNumber != null && episodeNumber != null) {
       return `${seriesName} S${seasonNumber}E${episodeNumber} - ${episodeName}`;
     }
-    if (itemDetail.type === 'Movie') {
-      return `${itemDetail.name} (${itemDetail.productionYear})`;
+    if (seriesName) {
+      return episodeName ? `${seriesName} - ${episodeName}` : seriesName;
     }
-
-    return episodeName || seriesName || '';
+    return episodeName;
   }, [itemDetail]);
 
+  const currentEpisodeIndex = useMemo(() => {
+    if (!itemId || !episodes.length) return -1;
+    const index = episodes.findIndex((episode) => episode.id === itemId);
+    return index;
+  }, [itemId, episodes]);
+
+  const hasPreviousEpisode = useMemo(() => {
+    return currentEpisodeIndex > 0;
+  }, [currentEpisodeIndex]);
+
+  const hasNextEpisode = useMemo(() => {
+    return currentEpisodeIndex >= 0 && currentEpisodeIndex < episodes.length - 1;
+  }, [currentEpisodeIndex, episodes.length]);
+
+  const previousEpisode = useMemo(() => {
+    if (!hasPreviousEpisode) return null;
+    return episodes[currentEpisodeIndex - 1];
+  }, [hasPreviousEpisode, episodes, currentEpisodeIndex]);
+
+  const nextEpisode = useMemo(() => {
+    if (!hasNextEpisode) return null;
+    return episodes[currentEpisodeIndex + 1];
+  }, [hasNextEpisode, episodes, currentEpisodeIndex]);
+
   useEffect(() => {
-    if (itemDetail?.userData?.playbackPositionTicks !== undefined && initialTime === -1) {
+    if (itemDetail?.userData?.playbackPositionTicks !== undefined) {
       const startTimeMs = Math.round(itemDetail.userData.playbackPositionTicks! / 10000);
       currentTime.value = startTimeMs;
       setInitialTime(ticksToSeconds(itemDetail.userData.playbackPositionTicks!));
     }
-  }, [itemDetail, currentTime, initialTime]);
+  }, [itemDetail, currentTime]);
 
   useEffect(() => {
     (async () => {
@@ -254,21 +276,43 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
 
   useEffect(() => {
     if (!player.current) return;
+
     (async () => {
       try {
         const audioTracks = await player.current?.getAudioTracks();
-        const subtitleTracks = await player.current?.getSubtitleTracks();
+        let subtitleTracks = await player.current?.getSubtitleTracks();
+
+        if (
+          streamInfo?.mediaSource?.TranscodingUrl &&
+          subtitleTracks &&
+          subtitleTracks.length > 1
+        ) {
+          subtitleTracks = [subtitleTracks[0], ...subtitleTracks.slice(1).reverse()];
+        }
+
+        let embedSubIndex = 1;
+        const processedSubs = allSubs?.map((sub) => {
+          const shouldIncrement =
+            sub.DeliveryMethod === SubtitleDeliveryMethod.Embed ||
+            sub.DeliveryMethod === SubtitleDeliveryMethod.Hls ||
+            sub.DeliveryMethod === SubtitleDeliveryMethod.External;
+          if (shouldIncrement) embedSubIndex++;
+          return {
+            name: sub.DisplayTitle || 'Undefined Subtitle',
+            index: sub.Index ?? -1,
+          };
+        });
 
         setTracks((prev) => ({
           ...prev,
           audio: audioTracks ?? [],
-          subtitle: subtitleTracks ?? [],
+          subtitle: processedSubs.sort((a, b) => a.index - b.index) ?? [],
         }));
       } catch (error) {
         console.error('Error setting tracks:', error);
       }
     })();
-  }, [player, isLoaded]);
+  }, [player, isLoaded, streamInfo?.mediaSource?.TranscodingUrl, allSubs]);
 
   const handlePlayPause = useCallback(() => {
     if (isPlaying) {
@@ -329,11 +373,35 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     [tracks?.subtitle],
   );
 
+  const handlePreviousEpisode = useCallback(() => {
+    if (previousEpisode?.id) {
+      router.replace({
+        pathname: '/player',
+        params: {
+          itemId: previousEpisode.id,
+        },
+      });
+    }
+  }, [previousEpisode, router]);
+
+  const handleNextEpisode = useCallback(() => {
+    if (nextEpisode?.id) {
+      router.replace({
+        pathname: '/player',
+        params: {
+          itemId: nextEpisode.id,
+        },
+      });
+    }
+  }, [nextEpisode, router]);
+
   const handleEpisodeSelect = useCallback(
     (episodeId: string) => {
       router.replace({
         pathname: '/player',
-        params: { itemId: episodeId },
+        params: {
+          itemId: episodeId,
+        },
       });
     },
     [router],
@@ -350,34 +418,59 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
             isNetwork: true,
             startPosition: initialTime,
             autoplay: true,
+            externalSubtitles,
           }}
           onVideoProgress={(e) => {
             const { duration, currentTime: newCurrentTime } = e.nativeEvent;
+
             setIsLoaded(true);
-            setMediaInfo({ duration, currentTime: newCurrentTime });
+
+            setMediaInfo({
+              duration,
+              currentTime: newCurrentTime,
+            });
             currentTime.value = newCurrentTime;
+
             syncPlaybackProgress(newCurrentTime, false);
+
             setIsBuffering(false);
             setIsPlaying(true);
             setIsStopped(false);
           }}
           onVideoStateChange={async (e) => {
             const { state } = e.nativeEvent;
-            if (state === 'Playing') setIsPlaying(true);
-            if (state === 'Paused') setIsPlaying(false);
-            if (state === 'Buffering') setIsBuffering(true);
+            if (state === 'Playing') {
+              setIsPlaying(true);
+              return;
+            }
+
+            if (state === 'Paused') {
+              setIsPlaying(false);
+              return;
+            }
+
+            if (state === 'Buffering') {
+              setIsBuffering(true);
+              return;
+            }
           }}
-          onVideoLoadEnd={() => setIsLoaded(true)}
+          onVideoLoadEnd={() => {
+            setIsLoaded(true);
+          }}
           onVideoError={async (e) => {
             const { state } = e.nativeEvent;
             if (state === 'Error') {
               setIsBuffering(false);
               setIsPlaying(false);
               setIsStopped(true);
+
               Alert.alert('Error', `Error: ${state}`);
             }
           }}
-          onMediaStatsChange={(e) => setMediaStats(e.nativeEvent.stats)}
+          onMediaStatsChange={(e) => {
+            const { stats } = e.nativeEvent;
+            setMediaStats(stats);
+          }}
         />
       )}
 
@@ -412,16 +505,10 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
         selectedTracks={selectedTracks}
         onAudioTrackChange={handleAudioTrackChange}
         onSubtitleTrackChange={handleSubtitleTrackChange}
-        hasPreviousEpisode={!!currentEpisodeIndex && currentEpisodeIndex > 0}
-        hasNextEpisode={!!currentEpisodeIndex && currentEpisodeIndex < episodes.length - 1}
-        onPreviousEpisode={() => {
-             const idx = episodes.findIndex(e => e.id === finalItemId);
-             if (idx > 0) router.replace({ pathname: '/player', params: { itemId: episodes[idx - 1].id! } });
-        }}
-        onNextEpisode={() => {
-             const idx = episodes.findIndex(e => e.id === finalItemId);
-             if (idx < episodes.length - 1) router.replace({ pathname: '/player', params: { itemId: episodes[idx + 1].id! } });
-        }}
+        hasPreviousEpisode={hasPreviousEpisode}
+        hasNextEpisode={hasNextEpisode}
+        onPreviousEpisode={handlePreviousEpisode}
+        onNextEpisode={handleNextEpisode}
         mediaStats={mediaStats}
         onCommentsLoaded={handleCommentsLoaded}
         danmakuEpisodeInfo={danmakuEpisodeInfo}
