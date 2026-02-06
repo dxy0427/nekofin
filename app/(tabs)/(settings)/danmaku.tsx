@@ -1,16 +1,15 @@
 import PageScrollView from '@/components/PageScrollView';
 import { Section } from '@/components/ui/Section';
+import { SettingsRow } from '@/components/ui/SettingsRow';
 import { SliderSetting } from '@/components/ui/SliderSetting';
 import { SwitchSetting } from '@/components/ui/SwitchSetting';
-import { SettingsRow } from '@/components/ui/SettingsRow'; // 新增引入
 import { defaultSettings, useDanmakuSettings } from '@/lib/contexts/DanmakuSettingsContext';
-import { useRouter } from 'expo-router'; // 新增引入
+import { useRouter } from 'expo-router';
 import { Alert, StyleSheet, Text, TouchableOpacity, View } from 'react-native';
 
 export default function DanmakuSettingsScreen() {
-  const router = useRouter(); // 初始化 router
-  const { settings, setSettings, getActiveSource } = useDanmakuSettings(); // 获取 getActiveSource
-
+  const { settings, setSettings, getActiveSource } = useDanmakuSettings();
+  const router = useRouter();
   const activeSource = getActiveSource();
 
   const updateSetting = <K extends keyof typeof settings>(key: K, value: (typeof settings)[K]) => {
@@ -37,21 +36,20 @@ export default function DanmakuSettingsScreen() {
 
   const handleResetToDefault = () => {
     setSettings({
-        ...defaultSettings,
-        sources: settings.sources, // 保留用户添加的源
-        activeSourceId: settings.activeSourceId // 保留当前选中的源
+      ...defaultSettings,
+      sources: settings.sources,
+      activeSourceId: settings.activeSourceId,
     });
     Alert.alert('恢复默认设置', '所有设置已恢复为默认值（弹幕源保留）');
   };
 
   return (
     <PageScrollView showsVerticalScrollIndicator={false}>
-      {/* 新增：弹幕源管理入口 */}
       <Section title="弹幕源">
         <SettingsRow
           title="当前源"
           subtitle={activeSource ? activeSource.name : '未选择'}
-          icon="server" // 确保你使用的 IconSet 有这个图标，或者换成 'cloud'
+          icon="server"
           onPress={() => router.push('/(tabs)/(settings)/danmaku-sources')}
         />
       </Section>
