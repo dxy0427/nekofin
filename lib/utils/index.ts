@@ -74,22 +74,32 @@ export const getDeviceId = () => {
   return deviceId;
 };
 
-export const getCommentsByItem = async (item: MediaItem, originalTitle?: string | null) => {
+export const getCommentsByItem = async (
+  baseUrl: string,
+  item: MediaItem,
+  originalTitle?: string | null,
+) => {
   const seriesName = item.seriesName;
   const seasonNumber = item.parentIndexNumber ?? 1;
   const episodeNumber = item.indexNumber;
-  const seriesId = item.seriesId;
 
-  let animes = await searchAnimesByKeyword(seriesName ?? '');
+  if (!baseUrl) {
+    return { comments: [], episodeInfo: undefined };
+  }
+
+  let animes = await searchAnimesByKeyword(baseUrl, seriesName ?? '');
   if (animes.length === 0) {
-    animes = await searchAnimesByKeyword(originalTitle ?? '');
+    animes = await searchAnimesByKeyword(baseUrl, originalTitle ?? '');
   }
   if (animes.length === 0) {
     return { comments: [], episodeInfo: undefined };
   }
   const anime = animes[seasonNumber - 1];
   if (anime && episodeNumber) {
-    const comments = await getCommentsByEpisodeId(anime.episodes[episodeNumber - 1].episodeId);
+    const comments = await getCommentsByEpisodeId(
+      baseUrl,
+      anime.episodes[episodeNumber - 1].episodeId,
+    );
     return {
       comments,
       episodeInfo: {
