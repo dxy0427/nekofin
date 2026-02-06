@@ -1,6 +1,6 @@
 import { MediaStats, MediaTrack, MediaTracks } from '@/modules/vlc-player';
 import { DandanComment } from '@/services/dandanplay';
-import { MediaItem } from '@/services/media/types';
+import { MediaItem, MediaSource, MediaStream } from '@/services/media/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { SharedValue, useSharedValue, withTiming } from 'react-native-reanimated';
 import { scheduleOnRN } from 'react-native-worklets';
@@ -23,9 +23,13 @@ type ControlsProps = {
   onRateChange?: (newRate: number | null, options?: { remember?: boolean }) => void;
   rate: number;
   tracks?: MediaTracks;
-  selectedTracks?: MediaTrack;
+  
+  selectedAudioTrackIndex?: number;
+  selectedSubtitleTrackIndex?: number;
+
   onAudioTrackChange?: (trackIndex: number) => void;
   onSubtitleTrackChange?: (trackIndex: number) => void;
+  
   hasPreviousEpisode?: boolean;
   hasNextEpisode?: boolean;
   onPreviousEpisode?: () => void;
@@ -40,6 +44,10 @@ type ControlsProps = {
   episodes: MediaItem[];
   currentItem?: MediaItem | null;
   onEpisodeSelect: (episodeId: string) => void;
+  mediaSources: MediaSource[];
+  currentMediaSourceId: string | null;
+  onMediaSourceChange: (sourceId: string) => void;
+  subtitleStreams: MediaStream[];
 };
 
 export function Controls({
@@ -53,7 +61,8 @@ export function Controls({
   onRateChange,
   rate,
   tracks,
-  selectedTracks,
+  selectedAudioTrackIndex,
+  selectedSubtitleTrackIndex,
   onAudioTrackChange,
   onSubtitleTrackChange,
   hasPreviousEpisode,
@@ -67,6 +76,10 @@ export function Controls({
   episodes,
   currentItem,
   onEpisodeSelect,
+  mediaSources,
+  currentMediaSourceId,
+  onMediaSourceChange,
+  subtitleStreams,
 }: ControlsProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showControls, setShowControls] = useState(false);
@@ -88,11 +101,7 @@ export function Controls({
 
   const hideControlsWithDelay = useCallback(() => {
     clearControlsTimeout();
-
-    if (menuOpen) {
-      return;
-    }
-
+    if (menuOpen) return;
     controlsTimeout.current = setTimeout(() => {
       if (
         !isDragging &&
@@ -115,9 +124,7 @@ export function Controls({
 
   useEffect(() => {
     if (menuOpen) {
-      if (controlsTimeout.current) {
-        clearTimeout(controlsTimeout.current);
-      }
+      if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
       setShowControls(true);
     } else {
       hideControlsWithDelay();
@@ -126,9 +133,7 @@ export function Controls({
 
   useEffect(() => {
     return () => {
-      if (controlsTimeout.current) {
-        clearTimeout(controlsTimeout.current);
-      }
+      if (controlsTimeout.current) clearTimeout(controlsTimeout.current);
     };
   }, []);
 
@@ -153,7 +158,8 @@ export function Controls({
     onRateChange,
     rate,
     tracks,
-    selectedTracks,
+    selectedAudioTrackIndex,
+    selectedSubtitleTrackIndex,
     onAudioTrackChange,
     onSubtitleTrackChange,
     hasPreviousEpisode,
@@ -181,6 +187,10 @@ export function Controls({
     isMovie: currentItem?.type === 'Movie',
     episodeListDrawerRef,
     onEpisodeSelect,
+    mediaSources,
+    currentMediaSourceId,
+    onMediaSourceChange,
+    subtitleStreams,
   };
 
   return (
