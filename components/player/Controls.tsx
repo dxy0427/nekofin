@@ -79,7 +79,7 @@ export function Controls({
   mediaSources,
   currentMediaSourceId,
   onMediaSourceChange,
-  subtitleStreams,
+  subtitleStreams = [], // 确保默认值
 }: ControlsProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [showControls, setShowControls] = useState(false);
