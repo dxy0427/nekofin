@@ -30,11 +30,12 @@ export function useMediaActions(item: MediaItem) {
   const handleAddToFavorites = async () => {
     if (!item.id || !currentServer || isUpdating) return;
 
-    setIsUpdating(true);
+    // 乐观更新：立即设置 UI 状态
     setLocalUserData((prev) => ({
       ...prev,
       isFavorite: true,
     }));
+    setIsUpdating(true);
 
     try {
       await mediaAdapter.addFavoriteItem({
@@ -42,6 +43,7 @@ export function useMediaActions(item: MediaItem) {
         itemId: item.id,
       });
     } catch (error) {
+      // 失败回滚
       setLocalUserData((prev) => ({
         ...prev,
         isFavorite: false,
@@ -55,12 +57,13 @@ export function useMediaActions(item: MediaItem) {
   const handleMarkAsWatched = async () => {
     if (!item.id || !currentServer || isUpdating) return;
 
-    setIsUpdating(true);
+    // 乐观更新
     setLocalUserData((prev) => ({
       ...prev,
       played: true,
       playedPercentage: 100,
     }));
+    setIsUpdating(true);
 
     try {
       await mediaAdapter.markItemPlayed({
@@ -69,6 +72,7 @@ export function useMediaActions(item: MediaItem) {
         datePlayed: new Date().toISOString(),
       });
     } catch (error) {
+      // 失败回滚
       setLocalUserData((prev) => ({
         ...prev,
         played: false,
@@ -83,12 +87,13 @@ export function useMediaActions(item: MediaItem) {
   const handleMarkAsUnwatched = async () => {
     if (!item.id || !currentServer || isUpdating) return;
 
-    setIsUpdating(true);
+    // 乐观更新
     setLocalUserData((prev) => ({
       ...prev,
       played: false,
       playedPercentage: 0,
     }));
+    setIsUpdating(true);
 
     try {
       await mediaAdapter.markItemUnplayed({
@@ -96,6 +101,7 @@ export function useMediaActions(item: MediaItem) {
         itemId: item.id,
       });
     } catch (error) {
+      // 失败回滚
       setLocalUserData((prev) => ({
         ...prev,
         played: true,
