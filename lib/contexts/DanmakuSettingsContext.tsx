@@ -20,7 +20,6 @@ export type DanmakuSettingsType = {
   curEpOffset: number;
   fontFamily: string;
   fontWeight: TextStyle['fontWeight'];
-  // 新增：源列表和当前选中的源ID
   sources: DanmakuSource[];
   activeSourceId: string;
 };
@@ -28,7 +27,6 @@ export type DanmakuSettingsType = {
 type DanmakuSettingsContextValue = {
   settings: DanmakuSettingsType;
   setSettings: (next: DanmakuSettingsType) => void;
-  // 辅助操作方法
   addSource: (name: string, url: string) => void;
   updateSource: (id: string, name: string, url: string) => void;
   removeSource: (id: string) => void;
@@ -36,6 +34,7 @@ type DanmakuSettingsContextValue = {
   getActiveSource: () => DanmakuSource | undefined;
 };
 
+// 默认不内置任何源，由用户添加
 export const defaultSettings: DanmakuSettingsType = {
   opacity: 0.8,
   speed: 140,
@@ -47,14 +46,8 @@ export const defaultSettings: DanmakuSettingsType = {
   curEpOffset: 0,
   fontFamily: '"Microsoft YaHei", "PingFang SC", "Noto Sans CJK SC", sans-serif',
   fontWeight: '700',
-  sources: [
-    {
-      id: 'default_dandan',
-      name: '弹弹Play官方',
-      url: 'https://api.dandanplay.net',
-    },
-  ],
-  activeSourceId: 'default_dandan',
+  sources: [], 
+  activeSourceId: '',
 };
 
 const DanmakuSettingsContext = createContext<DanmakuSettingsContextValue | null>(null);
@@ -64,13 +57,8 @@ export function DanmakuSettingsProvider({ children }: { children: React.ReactNod
     const savedSettings = storage.getString('danmakuSettings');
     if (savedSettings) {
       const parsed = JSON.parse(savedSettings);
-      // 迁移旧数据：如果旧数据没有 sources 字段，给予默认值
       if (!parsed.sources) {
-        return {
-          ...parsed,
-          sources: defaultSettings.sources,
-          activeSourceId: defaultSettings.activeSourceId,
-        };
+        return { ...parsed, sources: [], activeSourceId: '' };
       }
       return parsed;
     }
@@ -83,13 +71,10 @@ export function DanmakuSettingsProvider({ children }: { children: React.ReactNod
 
   const addSource = (name: string, url: string) => {
     const id = uuid.v4() as string;
-    const cleanUrl = url.replace(/\/$/, ''); // 去除末尾斜杠
-
+    const cleanUrl = url.replace(/\/$/, '');
     setSettings((prev) => {
       const newSource = { id, name, url: cleanUrl };
-      // 如果是列表为空，添加后自动选中
       const newActiveId = prev.sources.length === 0 ? id : prev.activeSourceId;
-
       return {
         ...prev,
         sources: [...prev.sources, newSource],
@@ -109,7 +94,6 @@ export function DanmakuSettingsProvider({ children }: { children: React.ReactNod
   const removeSource = (id: string) => {
     setSettings((prev) => {
       const newSources = prev.sources.filter((s) => s.id !== id);
-      // 如果删除了当前选中的源，重置 activeSourceId
       let newActiveId = prev.activeSourceId;
       if (prev.activeSourceId === id) {
         newActiveId = newSources.length > 0 ? newSources[0].id : '';
@@ -140,7 +124,7 @@ export function DanmakuSettingsProvider({ children }: { children: React.ReactNod
       setActiveSource,
       getActiveSource,
     }),
-    [settings],
+    [settings]
   );
 
   return (
