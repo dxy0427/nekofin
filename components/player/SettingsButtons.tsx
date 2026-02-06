@@ -23,7 +23,7 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
     setMenuOpen,
     onCommentsLoaded,
     title,
-    currentItem,
+    currentItem, // 获取当前播放的 item 对象
   } = usePlayer();
 
   const danmakuSearchModalRef = useRef<DanmakuSearchModalRef>(null);
@@ -55,9 +55,12 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
 
   const handleDanmakuSearch = useCallback(() => {
     let keyword = '';
+    // 优先使用 SeriesName (番剧名)，如果是电影则用 Name
     if (currentItem) {
       keyword = currentItem.seriesName || currentItem.name || '';
     } else if (title) {
+      // 如果没有 item 对象（不太可能），尝试从标题字符串提取
+      // 假设标题格式为 "番剧名 S01E01 - 标题"，取 S 之前的部分
       keyword = title.split(' S')[0];
     }
     danmakuSearchModalRef.current?.present(keyword);
