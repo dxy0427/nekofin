@@ -1,4 +1,4 @@
-import { MediaStats, MediaTracks } from '@/modules/vlc-player';
+import { MediaStats, MediaTrack, MediaTracks } from '@/modules/vlc-player';
 import { DandanComment } from '@/services/dandanplay';
 import { MediaItem } from '@/services/media/types';
 import { useCallback, useEffect, useRef, useState } from 'react';
@@ -23,6 +23,13 @@ type ControlsProps = {
   onRateChange?: (newRate: number | null, options?: { remember?: boolean }) => void;
   rate: number;
   tracks?: MediaTracks;
+  selectedTracks?: MediaTrack;
+  onAudioTrackChange?: (trackIndex: number) => void;
+  onSubtitleTrackChange?: (trackIndex: number) => void;
+  hasPreviousEpisode?: boolean;
+  hasNextEpisode?: boolean;
+  onPreviousEpisode?: () => void;
+  onNextEpisode?: () => void;
   mediaStats?: MediaStats | null;
   onCommentsLoaded?: (
     comments: DandanComment[],
@@ -46,6 +53,13 @@ export function Controls({
   onRateChange,
   rate,
   tracks,
+  selectedTracks,
+  onAudioTrackChange,
+  onSubtitleTrackChange,
+  hasPreviousEpisode,
+  hasNextEpisode,
+  onPreviousEpisode,
+  onNextEpisode,
   mediaStats,
   onCommentsLoaded,
   danmakuEpisodeInfo,
@@ -131,6 +145,13 @@ export function Controls({
     onRateChange,
     rate,
     tracks,
+    selectedTracks,
+    onAudioTrackChange,
+    onSubtitleTrackChange,
+    hasPreviousEpisode,
+    hasNextEpisode,
+    onPreviousEpisode,
+    onNextEpisode,
     mediaStats: mediaStats ?? null,
     showControls,
     setShowControls,
