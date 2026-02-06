@@ -171,8 +171,9 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     queryFn: async () => {
       if (!currentServer || !itemDetail || !selectedMediaSourceId) return null;
 
-      setIsLoaded(false);
-      setIsBuffering(true);
+      // 只有在真的要切换流时才重置状态，防止无限重置
+      // setIsLoaded(false); // 暂时注释，避免频繁闪烁
+      // setIsBuffering(true);
 
       const streamParams = {
         item: itemDetail,
@@ -213,38 +214,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     );
   }, [streamInfo?.mediaSource]);
 
-  // 构造 externalSubtitles 给 VLC（仅外挂字幕）
-  const externalSubtitles = useMemo(() => {
-    return subtitleStreams
-      .filter((sub) => sub.isForced !== true && !sub.isDefault) // 简单过滤，逻辑可根据需要调整
-      .filter((sub) => {
-        // 如果是外挂字幕，生成URL
-        // 注意：这里需要判断是否是外部字幕，Jellyfin API 通常没有直接字段标明 DeliveryMethod，
-        // 但可以通过 index 判断，或者后端适配器已经处理好了。
-        // 在 jellyfinAdapter.ts 中我们把 DeliveryMethod 丢了，这里假设适配器返回了足够信息。
-        // 如果需要更精确，需要在 adapter 的类型定义里加 DeliveryMethod。
-        // 这里暂时假设所有字幕都交给 VLC 处理不太现实，只有外部链接的才给 VLC。
-        // 由于我们在 adapter 里没有透传 DeliveryMethod，这里仅当 streamUrl 存在时才视为外挂。
-        // 但 adapter 没返回 streamUrl。
-        // 临时方案：所有字幕都通过 API 切换（烧录或 HLS），除非是纯 DirectPlay 且 VLC 能识别。
-        return false; 
-      });
-      // 修正：实际上，VLC 只要是 DirectPlay 就能读取内置字幕。
-      // 我们在 UI 上展示 subtitleStreams，点击后决定是 setSubtitleTrack (本地) 还是 reload (服务端)
-      return []; 
-  }, [subtitleStreams]);
-  
-  // 修正：我们需要把外挂字幕传递给 VLC，如果它有 URL
-  const vlcExternalSubtitles = useMemo(() => {
-     // 由于 adapter 限制，这里很难直接获得外挂 URL。
-     // 现行方案：通过 MediaStreams 列表在 UI 展示，点击后如果是 DirectPlay 且是内置，VLC 切；
-     // 否则刷新流。
-     // 为了支持外挂字幕，您需要在 Adapter 里把 DeliveryUrl 暴露出来。
-     // 假设现在主要解决“内置字幕不显示”的问题：
-     return undefined;
-  }, []);
-
-
   const { syncPlaybackProgress } = usePlaybackSync({
     currentServer,
     itemDetail: itemDetail ?? null,
@@ -273,7 +242,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     return ticksToMilliseconds(itemDetail?.runTimeTicks ?? 0) ?? mediaInfo?.duration ?? 0;
   }, [mediaInfo, itemDetail?.runTimeTicks]);
 
-  // --- 核心修改：标题格式化 ---
   const formattedTitle = useMemo(() => {
     if (!itemDetail) return '';
     const seriesName = itemDetail.seriesName;
@@ -281,11 +249,9 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     const episodeNumber = itemDetail.indexNumber;
     const episodeName = itemDetail.name;
 
-    // 格式：番剧名 S1E1 - 标题
     if (seriesName && seasonNumber != null && episodeNumber != null) {
       return `${seriesName} S${seasonNumber}E${episodeNumber} - ${episodeName}`;
     }
-    // 电影
     if (itemDetail.type === 'Movie') {
         return `${itemDetail.name} (${itemDetail.productionYear})`;
     }
@@ -315,13 +281,9 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
 
   useEffect(() => {
     if (!player.current) return;
-    // 获取 VLC 识别到的轨道，用于本地切换
     (async () => {
       try {
         const audioTracks = await player.current?.getAudioTracks();
-        // VLC 自身的字幕轨道（内置文本字幕）
-        // 我们不直接用这个做 UI 列表，因为 API 的列表更全（包含图片字幕、外挂字幕等）
-        // 但我们需要这个来做映射
         setTracks((prev) => ({
           ...prev,
           audio: audioTracks ?? [],
@@ -377,26 +339,17 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     [],
   );
 
-  // --- 核心修改：字幕切换 ---
   const handleSubtitleTrackChange = useCallback(
     (trackIndex: number) => {
-        // trackIndex 是 MediaStream.Index (API数据)
         setSelectedSubtitleIndex(trackIndex);
 
         if (trackIndex === -1) {
-            // 关闭字幕
             player.current?.setSubtitleTrack(-1);
             setServerSubtitleStreamIndex(undefined); 
             return;
         }
 
-        // 判断是否需要服务端转码/烧录
-        // 简单策略：如果当前流不是转码流，且目标字幕是 PGS/VobSub (图片字幕) 或者 ASS (且配置了烧录)，则刷新流
-        // 这里为了简化，我们采用“尝试本地切换，如果不成功或者需要烧录，则走服务端”
-        // 但更稳妥的是：直接设置 serverSubtitleStreamIndex，让服务端决定是 DirectStream (HLS分片) 还是 Transcode
-        // 除非我们非常确定 VLC 能搞定（比如内嵌 SRT）
-        
-        // 触发重载流
+        // 无论如何先尝试触发服务端的流重载（以支持烧录等）
         setServerSubtitleStreamIndex(trackIndex);
     },
     [],
@@ -408,7 +361,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     setSelectedSubtitleIndex(undefined);
   }, []);
 
-  // 路由跳转逻辑
   const handlePreviousEpisode = useCallback(() => {
     if (previousEpisode?.id) router.replace({ pathname: '/player', params: { itemId: previousEpisode.id } });
   }, [previousEpisode, router]);
@@ -421,18 +373,22 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     router.replace({ pathname: '/player', params: { itemId: episodeId } });
   }, [router]);
 
+  // 安全检查：只有当 url 存在且非空时才渲染 Player
+  const shouldRenderPlayer = !!streamInfo?.url && initialTime >= 0;
+
   return (
     <View style={styles.container}>
-      {streamInfo?.url && initialTime >= 0 && (
+      {shouldRenderPlayer && (
         <VlcPlayerView
           ref={player}
           style={styles.video}
           source={{
-            uri: streamInfo.url,
+            uri: streamInfo!.url!, // 确信不为空
             isNetwork: true,
             startPosition: initialTime,
             autoplay: true,
-            // externalSubtitles: vlcExternalSubtitles,
+            // 关键修复：不要传 externalSubtitles，除非你非常确定格式正确
+            // externalSubtitles: undefined 
           }}
           onVideoProgress={(e) => {
             const { duration, currentTime: newCurrentTime } = e.nativeEvent;
@@ -493,7 +449,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
         rate={rate}
         tracks={tracks}
         
-        // 传递选中状态
         selectedAudioTrackIndex={selectedAudioIndex}
         selectedSubtitleTrackIndex={selectedSubtitleIndex}
         
@@ -514,7 +469,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
         mediaSources={mediaSources}
         currentMediaSourceId={selectedMediaSourceId}
         onMediaSourceChange={handleMediaSourceChange}
-        subtitleStreams={subtitleStreams} // 传递 API 字幕列表
+        subtitleStreams={subtitleStreams}
       />
     </View>
   );
