@@ -69,7 +69,7 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   private val updateStatsRunnable = object : Runnable {
     override fun run() {
       updateMediaStats()
-      handler.postDelayed(this, 100L) // 改为每0.1秒更新一次，计算更稳定
+      handler.postDelayed(this, 200L) // 改为每0.2秒更新一次，计算更稳定
     }
   }
   private val currentActivity get() = context.findActivity()
