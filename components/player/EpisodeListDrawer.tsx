@@ -3,6 +3,7 @@ import { formatDurationFromTicks } from '@/lib/utils';
 import { MediaItem } from '@/services/media/types';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useCallback, useEffect, useImperativeHandle, useRef, useState } from 'react';
+import React from 'react';
 import {
   FlatList,
   StyleSheet,
@@ -26,6 +27,60 @@ export interface EpisodeListDrawerRef {
   present: () => void;
   dismiss: () => void;
 }
+
+const EpisodeListItem = React.memo(
+  ({
+    item,
+    isCurrent,
+    onPress,
+    subtitleColor,
+  }: {
+    item: MediaItem;
+    isCurrent: boolean;
+    onPress: (item: MediaItem) => void;
+    subtitleColor: string;
+  }) => {
+    return (
+      <TouchableOpacity
+        style={[styles.episodeItem, isCurrent && styles.currentEpisodeItem]}
+        onPress={() => onPress(item)}
+        activeOpacity={0.7}
+      >
+        <View style={styles.episodeContent}>
+          <EpisodeCard
+            item={item}
+            style={{ width: 140 }}
+            hideText
+            showBorder={false}
+            disableContextMenu
+            disabled
+            imgType="Primary"
+          />
+          <View style={styles.episodeInfo}>
+            <Text style={styles.episodeTitle} numberOfLines={2}>
+              {item.name}
+            </Text>
+            <Text style={[styles.episodeMeta, { color: subtitleColor }]}>
+              {`S${item.parentIndexNumber}E${item.indexNumber}`}
+            </Text>
+            <Text style={[styles.episodeMeta, { color: subtitleColor }]}>
+              {formatDurationFromTicks(item.runTimeTicks ?? 0)}
+            </Text>
+            {item.overview && (
+              <Text style={[styles.episodeOverview, { color: subtitleColor }]} numberOfLines={2}>
+                {item.overview.trim()}
+              </Text>
+            )}
+          </View>
+        </View>
+      </TouchableOpacity>
+    );
+  },
+  (prev, next) =>
+    prev.isCurrent === next.isCurrent &&
+    prev.item.id === next.item.id &&
+    prev.subtitleColor === next.subtitleColor
+);
 
 export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDrawerRef | null> }) {
   const { episodes, currentItem, onEpisodeSelect } = usePlayer();
@@ -60,11 +115,11 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
     if (open && currentItem && episodes.length > 0) {
       setTimeout(() => {
         const currentIndex = episodes.findIndex((episode) => episode.id === currentItem.id);
-        if (currentIndex >= 0) {
-          flatListRef.current?.scrollToIndex({
+        if (currentIndex >= 0 && flatListRef.current) {
+          flatListRef.current.scrollToIndex({
             index: currentIndex,
             animated: true,
-            viewPosition: 0,
+            viewPosition: 0.5,
           });
         }
       }, 350);
@@ -74,8 +129,10 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
   const handleEpisodePress = useCallback(
     (episode: MediaItem) => {
       if (episode.id) {
-        onEpisodeSelect(episode.id);
         dismiss();
+        setTimeout(() => {
+          onEpisodeSelect(episode.id);
+        }, 350);
       }
     },
     [onEpisodeSelect, dismiss],
@@ -84,41 +141,13 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
   const renderEpisodeItem = useCallback(
     ({ item }: { item: MediaItem }) => {
       const isCurrentEpisode = currentItem?.id === item.id;
-
       return (
-        <TouchableOpacity
-          style={[styles.episodeItem, isCurrentEpisode && styles.currentEpisodeItem]}
-          onPress={() => handleEpisodePress(item)}
-          activeOpacity={0.7}
-        >
-          <View style={styles.episodeContent}>
-            <EpisodeCard
-              item={item}
-              style={{ width: 140 }}
-              hideText
-              showBorder={false}
-              disableContextMenu
-              disabled
-              imgType="Primary"
-            />
-            <View style={styles.episodeInfo}>
-              <Text style={styles.episodeTitle} numberOfLines={2}>
-                {item.name}
-              </Text>
-              <Text style={[styles.episodeMeta, { color: subtitleColor }]}>
-                {`S${item.parentIndexNumber}E${item.indexNumber}`}
-              </Text>
-              <Text style={[styles.episodeMeta, { color: subtitleColor }]}>
-                {formatDurationFromTicks(item.runTimeTicks ?? 0)}
-              </Text>
-              {item.overview && (
-                <Text style={[styles.episodeOverview, { color: subtitleColor }]} numberOfLines={2}>
-                  {item.overview.trim()}
-                </Text>
-              )}
-            </View>
-          </View>
-        </TouchableOpacity>
+        <EpisodeListItem
+          item={item}
+          isCurrent={isCurrentEpisode}
+          onPress={handleEpisodePress}
+          subtitleColor={subtitleColor}
+        />
       );
     },
     [currentItem?.id, handleEpisodePress, subtitleColor],
@@ -127,6 +156,10 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
   const animatedStyle = useAnimatedStyle(() => ({
     opacity: opacity.value,
   }));
+
+  if (!open && opacity.value === 0) {
+    return null;
+  }
 
   return (
     <Animated.View
@@ -159,6 +192,15 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
               style={styles.list}
               contentContainerStyle={styles.listContent}
               showsVerticalScrollIndicator={false}
+              initialNumToRender={10}
+              windowSize={5}
+              maxToRenderPerBatch={5}
+              removeClippedSubviews={true}
+              getItemLayout={(data, index) => ({
+                length: 100, // 假设高度
+                offset: 100 * index,
+                index,
+              })}
               onScrollToIndexFailed={() => {
                 flatListRef.current?.scrollToOffset({ offset: 0, animated: true });
               }}

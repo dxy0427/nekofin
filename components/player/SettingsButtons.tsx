@@ -58,10 +58,23 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
     // 优先使用 SeriesName (番剧名)，如果是电影则用 Name
     if (currentItem) {
       keyword = currentItem.seriesName || currentItem.name || '';
+      // 修改：格式化为 S{季}E{集}，例如 "一念永恒 S2E1"
+      const season = currentItem.parentIndexNumber ?? 1;
+      const episode = currentItem.indexNumber ?? 1;
+      keyword += ` S${season}E${episode}`;
     } else if (title) {
-      // 如果没有 item 对象（不太可能），尝试从标题字符串提取
-      // 假设标题格式为 "番剧名 S01E01 - 标题"，取 S 之前的部分
-      keyword = title.split(' S')[0];
+      // 降级处理：尝试从标题字符串提取，例如 "番剧名 S2E1 - 标题"
+      // 尝试匹配 "SxxExx" 或 "Sxx Exx"
+      const match = title.match(/^(.*?) S(\d+)E(\d+)/);
+      if (match) {
+          const seriesName = match[1];
+          const seasonNum = parseInt(match[2], 10);
+          const episodeNum = parseInt(match[3], 10);
+          keyword = `${seriesName} S${seasonNum}E${episodeNum}`;
+      } else {
+          // 兜底
+          keyword = title.split(' -')[0];
+      }
     }
     danmakuSearchModalRef.current?.present(keyword);
   }, [currentItem, title]);

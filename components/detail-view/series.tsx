@@ -3,7 +3,7 @@ import { MediaItem, MediaPerson } from '@/services/media/types';
 import { FlatList, Text, View } from 'react-native';
 
 import { EpisodeCard, SeriesCard } from '../media/Card';
-import { detailViewStyles, ItemInfoList, ItemMeta, ItemOverview } from './common';
+import { detailViewStyles, ItemInfoList, ItemMeta, ItemOverview, PlayButton } from './common';
 import { PersonItem } from './PersonItem';
 
 export const SeriesModeContent = ({
@@ -20,9 +20,34 @@ export const SeriesModeContent = ({
   item: MediaItem;
 }) => {
   const textColor = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
+
+  // 获取下一个播放的剧集（通常是 nextUpItems 的第一个）
+  const resumeEpisode = nextUpItems.length > 0 ? nextUpItems[0] : null;
+
   return (
     <>
       <ItemMeta item={item} />
+
+      {/* 如果有待播放的剧集，显示一个大的播放按钮 */}
+      {resumeEpisode && (
+        <View style={{ marginTop: 8 }}>
+          <PlayButton item={resumeEpisode} />
+          <Text
+            style={{
+              color: textColor,
+              opacity: 0.6,
+              fontSize: 12,
+              marginTop: 4,
+              textAlign: 'center',
+            }}
+          >
+            {resumeEpisode.seasonId
+              ? `继续观看 S${resumeEpisode.parentIndexNumber}E${resumeEpisode.indexNumber}`
+              : '继续观看'}
+          </Text>
+        </View>
+      )}
+
       <ItemOverview item={item} />
       <ItemInfoList item={item} />
 

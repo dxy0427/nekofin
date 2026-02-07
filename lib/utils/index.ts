@@ -87,27 +87,59 @@ export const getCommentsByItem = async (
     return { comments: [], episodeInfo: undefined };
   }
 
-  let animes = await searchAnimesByKeyword(baseUrl, seriesName ?? '');
+  // 策略 1: 使用 S{季}E{集} 格式搜索，如 "一念永恒 S2E1"
+  let searchKeyword = `${seriesName} S${seasonNumber}E${episodeNumber}`;
+  let animes = await searchAnimesByKeyword(baseUrl, searchKeyword);
+  
+  // 策略 2: 如果搜不到，尝试仅带季号 "一念永恒 S2"
+  if (animes.length === 0 && seasonNumber > 1) {
+      animes = await searchAnimesByKeyword(baseUrl, `${seriesName} S${seasonNumber}`);
+  }
+
+  // 策略 3: 如果还搜不到，尝试仅带剧名
+  if (animes.length === 0) {
+      animes = await searchAnimesByKeyword(baseUrl, seriesName ?? '');
+  }
+
+  // 策略 4: 最后尝试原名
   if (animes.length === 0) {
     animes = await searchAnimesByKeyword(baseUrl, originalTitle ?? '');
   }
+
   if (animes.length === 0) {
     return { comments: [], episodeInfo: undefined };
   }
-  const anime = animes[seasonNumber - 1];
+  
+  // 此时 animes 可能包含多季，通常第一项就是最匹配的（因为我们用了 precise keyword）
+  const anime = animes[0]; 
+  
   if (anime && episodeNumber) {
-    const comments = await getCommentsByEpisodeId(
-      baseUrl,
-      anime.episodes[episodeNumber - 1].episodeId,
-    );
-    return {
-      comments,
-      episodeInfo: {
-        animeTitle: anime.animeTitle,
-        episodeTitle: anime.episodes[episodeNumber - 1].episodeTitle,
-      },
-    };
+    // 检查 episodeNumber 是否越界
+    // 注意：如果是用 S2E1 搜到的，可能返回的 anime 下面只有 1 集，或者是整个 S2 的列表
+    // 这里假设返回的是列表
+    let targetEpIndex = episodeNumber - 1;
+    
+    // 如果返回的剧集数量少于 index，可能是只搜到了单集（S2E1），此时尝试取第0个
+    if (targetEpIndex >= anime.episodes.length && anime.episodes.length === 1) {
+        // 这种情况下，可能直接命中了单集条目
+        targetEpIndex = 0;
+    }
+
+    if (targetEpIndex < anime.episodes.length) {
+        const comments = await getCommentsByEpisodeId(
+          baseUrl,
+          anime.episodes[targetEpIndex].episodeId,
+        );
+        return {
+          comments,
+          episodeInfo: {
+            animeTitle: anime.animeTitle,
+            episodeTitle: anime.episodes[targetEpIndex].episodeTitle,
+          },
+        };
+    }
   }
+  return { comments: [], episodeInfo: undefined };
 };
 
 export function isNil(value: unknown): value is null | undefined {

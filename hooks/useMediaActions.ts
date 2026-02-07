@@ -1,6 +1,7 @@
 import { useMediaAdapter } from '@/hooks/useMediaAdapter';
 import { useMediaServers } from '@/lib/contexts/MediaServerContext';
 import { MediaItem, MediaUserData } from '@/services/media/types';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
@@ -8,6 +9,7 @@ export function useMediaActions(item: MediaItem) {
   const router = useRouter();
   const { currentServer } = useMediaServers();
   const mediaAdapter = useMediaAdapter();
+  const queryClient = useQueryClient();
 
   const [localUserData, setLocalUserData] = useState<MediaUserData | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -30,17 +32,21 @@ export function useMediaActions(item: MediaItem) {
   const handleAddToFavorites = async () => {
     if (!item.id || !currentServer || isUpdating) return;
 
-    setIsUpdating(true);
+    // 乐观更新
     setLocalUserData((prev) => ({
       ...prev,
       isFavorite: true,
     }));
+    setIsUpdating(true);
 
     try {
       await mediaAdapter.addFavoriteItem({
         userId: currentServer.userId,
         itemId: item.id,
       });
+      // 成功后刷新缓存，确保 UI 状态和服务器一致
+      queryClient.invalidateQueries({ queryKey: ['itemDetail', item.id] });
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
     } catch (error) {
       setLocalUserData((prev) => ({
         ...prev,
@@ -55,19 +61,25 @@ export function useMediaActions(item: MediaItem) {
   const handleMarkAsWatched = async () => {
     if (!item.id || !currentServer || isUpdating) return;
 
-    setIsUpdating(true);
+    // 乐观更新
     setLocalUserData((prev) => ({
       ...prev,
       played: true,
       playedPercentage: 100,
     }));
+    setIsUpdating(true);
 
     try {
+      // 修复：不传递 datePlayed，让服务器使用当前时间
+      // 传递自定义时间可能会因为格式问题导致 Emby 接口调用成功但状态未更新
       await mediaAdapter.markItemPlayed({
         userId: currentServer.userId,
         itemId: item.id,
-        datePlayed: new Date().toISOString(),
       });
+      // 关键修复：刷新缓存
+      queryClient.invalidateQueries({ queryKey: ['itemDetail', item.id] });
+      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['homeSections'] });
     } catch (error) {
       setLocalUserData((prev) => ({
         ...prev,
@@ -83,18 +95,23 @@ export function useMediaActions(item: MediaItem) {
   const handleMarkAsUnwatched = async () => {
     if (!item.id || !currentServer || isUpdating) return;
 
-    setIsUpdating(true);
+    // 乐观更新
     setLocalUserData((prev) => ({
       ...prev,
       played: false,
       playedPercentage: 0,
     }));
+    setIsUpdating(true);
 
     try {
       await mediaAdapter.markItemUnplayed({
         userId: currentServer.userId,
         itemId: item.id,
       });
+      // 关键修复：刷新缓存
+      queryClient.invalidateQueries({ queryKey: ['itemDetail', item.id] });
+      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['homeSections'] });
     } catch (error) {
       setLocalUserData((prev) => ({
         ...prev,

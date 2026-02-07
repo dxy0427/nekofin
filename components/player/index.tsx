@@ -18,7 +18,6 @@ import {
   VlcPlayerViewRef,
 } from '@/modules/vlc-player';
 import { DandanComment } from '@/services/dandanplay';
-import { SubtitleDeliveryMethod } from '@jellyfin/sdk/lib/generated-client/models';
 import { useQuery } from '@tanstack/react-query';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useRouter } from 'expo-router';
@@ -74,6 +73,10 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const player = useRef<VlcPlayerViewRef>(null);
   const danmakuLayer = useRef<DanmakuLayerRef>(null);
   const currentTime = useSharedValue(0);
+
+  // 用于防抖自动播放下一集
+  const autoNextEpisodeTimer = useRef<NodeJS.Timeout | null>(null);
+  const isEndingRef = useRef(false);
 
   const { data: itemDetail } = useQuery({
     queryKey: ['itemDetail', itemId, currentServer?.userId],
@@ -172,17 +175,17 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
 
   const allSubs = useMemo(() => {
     return (
-      streamInfo?.mediaSource?.MediaStreams?.filter((sub) => sub.Type === 'Subtitle').sort(
-        (a, b) => Number(a.IsExternal) - Number(b.IsExternal),
-      ) || []
+      streamInfo?.mediaSource?.MediaStreams?.filter(
+        (sub) => sub.type === 'Subtitle' || sub.type === 'Subtitle' || sub.Type === 'Subtitle',
+      ).sort((a, b) => Number(a.IsExternal) - Number(b.IsExternal)) || []
     );
   }, [streamInfo?.mediaSource?.MediaStreams]);
 
   const externalSubtitles = useMemo(() => {
     const subs = allSubs
-      .filter((sub) => sub.DeliveryMethod === 'External')
+      .filter((sub) => sub.IsExternal || sub.DeliveryMethod === 'External')
       .map((sub) => ({
-        name: sub.DisplayTitle ?? '',
+        name: sub.DisplayTitle || sub.Title || sub.Language || 'Unknown',
         DeliveryUrl: `${currentApi?.basePath}${sub.DeliveryUrl ?? ''}`,
       }));
     return subs;
@@ -193,6 +196,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     itemDetail: itemDetail ?? null,
     currentTime,
     playSessionId: streamInfo?.sessionId ?? null,
+    isPlaying, 
   });
 
   const { data: episodes = [] } = useQuery({
@@ -256,6 +260,72 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     return episodes[currentEpisodeIndex + 1];
   }, [hasNextEpisode, episodes, currentEpisodeIndex]);
 
+  // 引用最新状态
+  const nextEpisodeRef = useRef(nextEpisode);
+  const hasNextEpisodeRef = useRef(hasNextEpisode);
+
+  useEffect(() => {
+    nextEpisodeRef.current = nextEpisode;
+    hasNextEpisodeRef.current = hasNextEpisode;
+  }, [nextEpisode, hasNextEpisode]);
+
+  const handleNextEpisode = useCallback(() => {
+    const nextEp = nextEpisodeRef.current;
+    if (nextEp?.id) {
+      if (autoNextEpisodeTimer.current) {
+         clearTimeout(autoNextEpisodeTimer.current);
+         autoNextEpisodeTimer.current = null;
+      }
+      player.current?.stop();
+      setIsStopped(false);
+      setIsPlaying(false);
+      setIsBuffering(true);
+      setIsLoaded(false);
+      isEndingRef.current = false; // 重置结束标记
+      router.replace({
+        pathname: '/player',
+        params: {
+          itemId: nextEp.id,
+        },
+      });
+    }
+  }, [router]);
+
+  const handlePreviousEpisode = useCallback(() => {
+    if (previousEpisode?.id) {
+      player.current?.stop();
+      setIsStopped(false);
+      setIsPlaying(false);
+      setIsBuffering(true);
+      setIsLoaded(false);
+      isEndingRef.current = false;
+      router.replace({
+        pathname: '/player',
+        params: {
+          itemId: previousEpisode.id,
+        },
+      });
+    }
+  }, [previousEpisode, router]);
+
+  const handleEpisodeSelect = useCallback(
+    (episodeId: string) => {
+      player.current?.stop();
+      setIsStopped(false);
+      setIsPlaying(false);
+      setIsBuffering(true);
+      setIsLoaded(false);
+      isEndingRef.current = false;
+      router.replace({
+        pathname: '/player',
+        params: {
+          itemId: episodeId,
+        },
+      });
+    },
+    [router],
+  );
+
   useEffect(() => {
     if (itemDetail?.userData?.playbackPositionTicks !== undefined) {
       const startTimeMs = Math.round(itemDetail.userData.playbackPositionTicks! / 10000);
@@ -275,44 +345,26 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   }, [isPlaying]);
 
   useEffect(() => {
-    if (!player.current) return;
+    if (!player.current || !isLoaded) return;
 
-    (async () => {
+    const fetchTracks = async () => {
       try {
         const audioTracks = await player.current?.getAudioTracks();
-        let subtitleTracks = await player.current?.getSubtitleTracks();
-
-        if (
-          streamInfo?.mediaSource?.TranscodingUrl &&
-          subtitleTracks &&
-          subtitleTracks.length > 1
-        ) {
-          subtitleTracks = [subtitleTracks[0], ...subtitleTracks.slice(1).reverse()];
-        }
-
-        let embedSubIndex = 1;
-        const processedSubs = allSubs?.map((sub) => {
-          const shouldIncrement =
-            sub.DeliveryMethod === SubtitleDeliveryMethod.Embed ||
-            sub.DeliveryMethod === SubtitleDeliveryMethod.Hls ||
-            sub.DeliveryMethod === SubtitleDeliveryMethod.External;
-          if (shouldIncrement) embedSubIndex++;
-          return {
-            name: sub.DisplayTitle || 'Undefined Subtitle',
-            index: sub.Index ?? -1,
-          };
-        });
+        const subtitleTracks = await player.current?.getSubtitleTracks();
 
         setTracks((prev) => ({
           ...prev,
           audio: audioTracks ?? [],
-          subtitle: processedSubs.sort((a, b) => a.index - b.index) ?? [],
+          subtitle: subtitleTracks ?? [],
         }));
       } catch (error) {
-        console.error('Error setting tracks:', error);
+        console.error('Error fetching tracks from player:', error);
       }
-    })();
-  }, [player, isLoaded, streamInfo?.mediaSource?.TranscodingUrl, allSubs]);
+    };
+
+    const timer = setTimeout(fetchTracks, 500);
+    return () => clearTimeout(timer);
+  }, [player, isLoaded]);
 
   const handlePlayPause = useCallback(() => {
     if (isPlaying) {
@@ -347,6 +399,8 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       player.current?.seekTo(position * duration);
       danmakuLayer.current?.seek(position * duration);
       setIsBuffering(false);
+      // Seek 后重置结束标记
+      isEndingRef.current = false;
     },
     [currentTime, duration, danmakuLayer],
   );
@@ -373,40 +427,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     [tracks?.subtitle],
   );
 
-  const handlePreviousEpisode = useCallback(() => {
-    if (previousEpisode?.id) {
-      router.replace({
-        pathname: '/player',
-        params: {
-          itemId: previousEpisode.id,
-        },
-      });
-    }
-  }, [previousEpisode, router]);
-
-  const handleNextEpisode = useCallback(() => {
-    if (nextEpisode?.id) {
-      router.replace({
-        pathname: '/player',
-        params: {
-          itemId: nextEpisode.id,
-        },
-      });
-    }
-  }, [nextEpisode, router]);
-
-  const handleEpisodeSelect = useCallback(
-    (episodeId: string) => {
-      router.replace({
-        pathname: '/player',
-        params: {
-          itemId: episodeId,
-        },
-      });
-    },
-    [router],
-  );
-
   return (
     <View style={styles.container}>
       {streamInfo?.url && initialTime >= 0 && (
@@ -423,7 +443,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
           onVideoProgress={(e) => {
             const { duration, currentTime: newCurrentTime } = e.nativeEvent;
 
-            setIsLoaded(true);
+            if (!isLoaded) setIsLoaded(true);
 
             setMediaInfo({
               duration,
@@ -436,6 +456,25 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
             setIsBuffering(false);
             setIsPlaying(true);
             setIsStopped(false);
+
+            // 关键修复：修改了判定条件
+            // 删除了百分比检查（99%在长视频中会导致提前十几秒跳转）
+            // 仅当剩余时间少于 0.5 秒时才认为播放结束
+            if (duration > 0 && (duration - newCurrentTime < 500)) {
+                if (!isEndingRef.current) {
+                    isEndingRef.current = true;
+                    if (hasNextEpisodeRef.current) {
+                         // 延迟 500ms 跳转，避免瞬时跳
+                         if (autoNextEpisodeTimer.current) clearTimeout(autoNextEpisodeTimer.current);
+                         autoNextEpisodeTimer.current = setTimeout(() => {
+                             handleNextEpisode();
+                         }, 500);
+                    } else {
+                         setIsStopped(true);
+                         setIsPlaying(false);
+                    }
+                }
+            }
           }}
           onVideoStateChange={async (e) => {
             const { state } = e.nativeEvent;
@@ -452,6 +491,19 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
             if (state === 'Buffering') {
               setIsBuffering(true);
               return;
+            }
+
+            // 保留 Ended 状态作为后备，但主要依赖 onVideoProgress
+            if (state === 'Ended') {
+              setIsPlaying(false);
+              if (!isEndingRef.current) {
+                  isEndingRef.current = true;
+                  if (hasNextEpisodeRef.current) {
+                      handleNextEpisode();
+                  } else {
+                      setIsStopped(true);
+                  }
+              }
             }
           }}
           onVideoLoadEnd={() => {

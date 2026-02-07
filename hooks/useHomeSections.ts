@@ -158,9 +158,10 @@ export function useHomeSections(currentServer: MediaServerInfo | null) {
         const query = latestQueries[index];
         const items = query?.data ?? [];
 
+        // 修复：移除 "最近添加的" 前缀，直接使用文件夹名称
         return {
           key: `latest_${folder.folderId}`,
-          title: `最近添加的 ${folder.name}`,
+          title: folder.name, 
           items,
           type: 'latest',
           isLoading: query?.isPending ?? false,
