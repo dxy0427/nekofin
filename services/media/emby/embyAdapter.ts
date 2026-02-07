@@ -817,7 +817,6 @@ export class EmbyAdapter implements MediaAdapter {
   async markItemPlayed({ userId, itemId, datePlayed }: MarkItemPlayedParams): Promise<void> {
     const qs = new URLSearchParams();
     if (datePlayed) qs.set('DatePlayed', datePlayed);
-    // 关键修复：Emby 标记已看必须传空 JSON 对象 {}，否则会报 400 或不生效
     await getEmbyApiClient().post(`/Users/${userId}/PlayedItems/${itemId}?${qs.toString()}`, {});
   }
 
@@ -831,7 +830,6 @@ export class EmbyAdapter implements MediaAdapter {
     isPaused,
     PlaySessionId,
   }: ReportPlaybackProgressParams): Promise<void> {
-    // 关键修复：Emby 需要 EventName='TimeUpdate' 才能正确记录进度
     await getEmbyApiClient().post(`/Sessions/Playing/Progress`, {
       ItemId: itemId,
       PositionTicks: Math.floor(positionTicks * 10000),
