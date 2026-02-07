@@ -58,10 +58,26 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
     // 优先使用 SeriesName (番剧名)，如果是电影则用 Name
     if (currentItem) {
       keyword = currentItem.seriesName || currentItem.name || '';
+      // 修复：如果 parentIndexNumber (季号) 大于 1，尝试追加 Season X 或 第X季
+      // DandanPlay 搜索通常支持 "番名 第X季" 或 "番名 Season X"
+      if (currentItem.parentIndexNumber && currentItem.parentIndexNumber > 1) {
+          keyword += ` Season ${currentItem.parentIndexNumber}`;
+      }
     } else if (title) {
-      // 如果没有 item 对象（不太可能），尝试从标题字符串提取
-      // 假设标题格式为 "番剧名 S01E01 - 标题"，取 S 之前的部分
-      keyword = title.split(' S')[0];
+      // 降级处理：尝试从标题字符串提取，例如 "番剧名 S03E01 - 标题"
+      // 简单切分 Sxx 前面的部分
+      const match = title.match(/^(.*?) S(\d+)/);
+      if (match) {
+          const seriesName = match[1];
+          const seasonNum = parseInt(match[2], 10);
+          keyword = seriesName;
+          if (seasonNum > 1) {
+              keyword += ` Season ${seasonNum}`;
+          }
+      } else {
+          // 兜底
+          keyword = title.split(' -')[0];
+      }
     }
     danmakuSearchModalRef.current?.present(keyword);
   }, [currentItem, title]);
