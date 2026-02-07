@@ -39,6 +39,8 @@ export type ItemGridScreenProps = {
   filters?: MediaFilters;
   onChangeFilters?: (next: MediaFilters) => void;
   disableGrouping?: boolean;
+  // 新增属性：接受自定义分组顺序
+  groupOrder?: string[];
 };
 
 export function ItemGridScreen({
@@ -49,6 +51,7 @@ export function ItemGridScreen({
   filters,
   onChangeFilters,
   disableGrouping = false,
+  groupOrder,
 }: ItemGridScreenProps) {
   const insets = useSafeAreaInsets();
   const backgroundColor = useThemeColor({ light: '#fff', dark: '#000' }, 'background');
@@ -113,8 +116,18 @@ export function ItemGridScreen({
       if (!typeToItems[key]) typeToItems[key] = [];
       typeToItems[key].push(item);
     });
-    // 修复：添加 BoxSet 和 Season 到排序和标题映射中
-    const order = ['BoxSet', 'Series', 'Season', 'Movie', 'Episode', 'MusicVideo', 'Other'];
+
+    // 优先使用传入的 groupOrder，否则使用默认顺序
+    const order = groupOrder || [
+      'Movie',
+      'Series',
+      'BoxSet',
+      'Season',
+      'Episode',
+      'MusicVideo',
+      'Other',
+    ];
+
     const titleMap: Record<string, string> = {
       BoxSet: '合集',
       Series: '剧集',
@@ -131,7 +144,7 @@ export function ItemGridScreen({
         (order.indexOf(b[0]) === -1 ? 999 : order.indexOf(b[0])),
     );
     return entries.map(([type, items]) => ({ key: type, title: titleMap[type] || type, items }));
-  }, [items, disableGrouping]);
+  }, [items, disableGrouping, groupOrder]);
 
   const { refreshing, onRefresh } = useRefresh(refetch || (async () => {}));
 
