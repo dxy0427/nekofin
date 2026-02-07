@@ -61,11 +61,15 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
   private var externalSubtitles: List<Map<String, String>>? = null
   var hasSource: Boolean = false
 
+  // 用于计算实时网速的变量
+  private var lastStatTime: Long = 0
+  private var lastReadBytes: Long = 0
+
   private val handler = Handler(Looper.getMainLooper())
   private val updateStatsRunnable = object : Runnable {
     override fun run() {
       updateMediaStats()
-      handler.postDelayed(this, 500L)
+      handler.postDelayed(this, 100L) // 改为每0.1秒更新一次，计算更稳定
     }
   }
   private val currentActivity get() = context.findActivity()
@@ -254,6 +258,10 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     // Set initial external subtitles immediately like iOS
     setInitialExternalSubtitles()
 
+    // 重置网速计算相关变量
+    lastStatTime = 0
+    lastReadBytes = 0
+
     hasSource = true
 
     if (autoplay) {
@@ -362,9 +370,30 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     val m = media ?: return
     val stats = m.getStats() ?: return
 
+    // --- 修复开始: 手动计算实时网速 ---
+    val now = System.currentTimeMillis()
+    val currentReadBytes = stats.readBytes.toLong()
+    var realTimeBitrate = 0f
+
+    if (lastStatTime > 0 && now > lastStatTime) {
+      val timeDiffMs = now - lastStatTime
+      val bytesDiff = currentReadBytes - lastReadBytes
+      
+      // 计算公式: (字节差 / 毫秒差) * 1000 = 字节/秒 * 8 = 比特/秒
+      if (bytesDiff >= 0) {
+        realTimeBitrate = (bytesDiff.toFloat() / timeDiffMs.toFloat()) * 1000f * 8f
+      }
+    }
+
+    // 更新状态
+    lastStatTime = now
+    lastReadBytes = currentReadBytes
+    // --- 修复结束 ---
+
     val currentStats: Map<String, Any> = mapOf(
-      "readBytes" to stats.readBytes.toLong(),
-      "inputBitrate" to stats.inputBitrate.toFloat(),
+      "readBytes" to currentReadBytes,
+      // 使用计算出的实时码率替代 VLC 原生的 inputBitrate (后者往往是平均值)
+      "inputBitrate" to realTimeBitrate, 
       "demuxReadBytes" to stats.demuxReadBytes.toLong(),
       "demuxBitrate" to stats.demuxBitrate.toFloat(),
       "demuxCorrupted" to stats.demuxCorrupted.toLong(),
@@ -379,6 +408,18 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
       "sentBytes" to stats.sentBytes.toLong(),
       "sendBitrate" to stats.sendBitrate.toFloat()
     )
+
+    // 只要有网速变化，就发送事件，不要被 lastMediaStats 拦截
+    if (realTimeBitrate > 0) {
+        lastMediaStats = currentStats
+        onMediaStatsChange(
+          mapOf(
+            "target" to "null",
+            "stats" to currentStats
+          )
+        )
+        return
+    }
 
     val unchanged = lastMediaStats?.let { it == currentStats } ?: false
     if (unchanged) return
@@ -433,6 +474,8 @@ class VlcPlayerView(context: Context, appContext: AppContext) : ExpoView(context
     mediaPlayer = null
     media = null
     libVLC = null
+    lastReadBytes = 0
+    lastStatTime = 0
   }
 
   override fun onEvent(event: MediaPlayer.Event) {
