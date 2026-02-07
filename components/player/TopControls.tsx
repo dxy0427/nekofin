@@ -108,7 +108,8 @@ export function TopControls() {
             networkType === Network.NetworkStateType.UNKNOWN) && (
             <Ionicons name="unlink" size={14} color="#fff" />
           )}
-          {!!mediaStats?.inputBitrate && mediaStats.inputBitrate > 0 && (
+          {/* 修正判断逻辑：只要 inputBitrate 存在就显示（包括 0），0 由 formatBitrate 格式化为 "0 KB/s" */}
+          {mediaStats?.inputBitrate !== undefined && mediaStats.inputBitrate >= 0 && (
             <Text style={[styles.textShadow, styles.netSpeedText]}>
               {formatBitrate(mediaStats.inputBitrate, { unit: 'bytes' })}
             </Text>
