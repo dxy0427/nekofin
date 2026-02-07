@@ -1,6 +1,6 @@
 import { GroupOrderSheet, GroupOrderSheetRef } from '@/components/media/GroupOrderSheet';
 import { ItemGridScreen } from '@/components/media/ItemGridScreen';
-import { useGroupOrder } from '@/hooks/useGroupOrder';
+import { useGroupOrder } from '@/lib/contexts/GroupOrderContext'; // 引入 Context
 import { useInfiniteQueryWithFocus } from '@/hooks/useInfiniteQueryWithFocus';
 import { useMediaAdapter } from '@/hooks/useMediaAdapter';
 import { useMediaFilters } from '@/hooks/useMediaFilters';
@@ -10,14 +10,14 @@ import { MediaItem } from '@/services/media/types';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { useNavigation } from 'expo-router';
 import { useEffect, useRef } from 'react';
-import { TouchableOpacity, View } from 'react-native';
+import { TouchableOpacity } from 'react-native';
 
 export default function FavoritesScreen() {
   const { currentServer } = useMediaServers();
   const mediaAdapter = useMediaAdapter();
   const navigation = useNavigation();
   const { textColor } = useSettingsColors();
-  const { order } = useGroupOrder();
+  const { order } = useGroupOrder(); // 使用全局状态
   
   const sortSheetRef = useRef<GroupOrderSheetRef>(null);
 
@@ -28,7 +28,7 @@ export default function FavoritesScreen() {
   const query = useInfiniteQueryWithFocus({
     refetchOnScreenFocus: true,
     enabled: !!currentServer,
-    queryKey: ['favorites', currentServer?.id, filters],
+    queryKey: ['favorites', currentServer?.id, filters], // 确保 filters 变化触发重刷
     initialPageParam: 0,
     queryFn: async ({ pageParam = 0 }) => {
       if (!currentServer) return { items: [], total: 0 };
@@ -77,7 +77,7 @@ export default function FavoritesScreen() {
         type="series"
         filters={filters}
         onChangeFilters={setFilters}
-        groupOrder={order}
+        groupOrder={order} // 传递即时顺序
       />
       <GroupOrderSheet ref={sortSheetRef} />
     </>
