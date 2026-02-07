@@ -1,5 +1,6 @@
 import { useColorScheme } from '@/hooks/useColorScheme';
 import { DanmakuSettingsProvider } from '@/lib/contexts/DanmakuSettingsContext';
+import { GroupOrderProvider } from '@/lib/contexts/GroupOrderContext';
 import { MediaServerProvider } from '@/lib/contexts/MediaServerContext';
 import { ThemeColorProvider } from '@/lib/contexts/ThemeColorContext';
 import { ThemePreferenceProvider } from '@/lib/contexts/ThemePreferenceContext';
@@ -55,7 +56,6 @@ export default function RootLayout() {
   }, [segments]);
 
   if (!loaded) {
-    // Async font loading only occurs in development.
     return null;
   }
 
@@ -72,22 +72,24 @@ export default function RootLayout() {
           <MediaServerProvider>
             <DanmakuSettingsProvider>
               <ThemeColorProvider>
-                <BottomSheetModalProvider>
-                  <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
-                    <Stack
-                      screenOptions={{
-                        headerTransparent: Platform.OS === 'ios',
-                        headerBackTitle: '',
-                        headerBackButtonDisplayMode: 'minimal',
-                      }}
-                    >
-                      <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
-                      <Stack.Screen name="player" options={{ headerShown: false }} />
-                      <Stack.Screen name="+not-found" />
-                    </Stack>
-                    <StatusBar style="auto" />
-                  </ThemeProvider>
-                </BottomSheetModalProvider>
+                <GroupOrderProvider>
+                  <BottomSheetModalProvider>
+                    <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
+                      <Stack
+                        screenOptions={{
+                          headerTransparent: Platform.OS === 'ios',
+                          headerBackTitle: '',
+                          headerBackButtonDisplayMode: 'minimal',
+                        }}
+                      >
+                        <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+                        <Stack.Screen name="player" options={{ headerShown: false }} />
+                        <Stack.Screen name="+not-found" />
+                      </Stack>
+                      <StatusBar style="auto" />
+                    </ThemeProvider>
+                  </BottomSheetModalProvider>
+                </GroupOrderProvider>
               </ThemeColorProvider>
             </DanmakuSettingsProvider>
           </MediaServerProvider>
