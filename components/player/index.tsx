@@ -18,7 +18,6 @@ import {
   VlcPlayerViewRef,
 } from '@/modules/vlc-player';
 import { DandanComment } from '@/services/dandanplay';
-import { SubtitleDeliveryMethod } from '@jellyfin/sdk/lib/generated-client/models';
 import { useQuery } from '@tanstack/react-query';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useRouter } from 'expo-router';
@@ -74,6 +73,10 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const player = useRef<VlcPlayerViewRef>(null);
   const danmakuLayer = useRef<DanmakuLayerRef>(null);
   const currentTime = useSharedValue(0);
+
+  // 用于防抖自动播放下一集
+  const autoNextEpisodeTimer = useRef<NodeJS.Timeout | null>(null);
+  const isEndingRef = useRef(false);
 
   const { data: itemDetail } = useQuery({
     queryKey: ['itemDetail', itemId, currentServer?.userId],
@@ -257,7 +260,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     return episodes[currentEpisodeIndex + 1];
   }, [hasNextEpisode, episodes, currentEpisodeIndex]);
 
-  // 关键修复：使用 ref 保持最新的下一集状态，供闭包调用
+  // 引用最新状态
   const nextEpisodeRef = useRef(nextEpisode);
   const hasNextEpisodeRef = useRef(hasNextEpisode);
 
@@ -269,11 +272,16 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
   const handleNextEpisode = useCallback(() => {
     const nextEp = nextEpisodeRef.current;
     if (nextEp?.id) {
+      if (autoNextEpisodeTimer.current) {
+         clearTimeout(autoNextEpisodeTimer.current);
+         autoNextEpisodeTimer.current = null;
+      }
       player.current?.stop();
       setIsStopped(false);
       setIsPlaying(false);
       setIsBuffering(true);
       setIsLoaded(false);
+      isEndingRef.current = false; // 重置结束标记
       router.replace({
         pathname: '/player',
         params: {
@@ -290,6 +298,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       setIsPlaying(false);
       setIsBuffering(true);
       setIsLoaded(false);
+      isEndingRef.current = false;
       router.replace({
         pathname: '/player',
         params: {
@@ -306,6 +315,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       setIsPlaying(false);
       setIsBuffering(true);
       setIsLoaded(false);
+      isEndingRef.current = false;
       router.replace({
         pathname: '/player',
         params: {
@@ -389,6 +399,8 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       player.current?.seekTo(position * duration);
       danmakuLayer.current?.seek(position * duration);
       setIsBuffering(false);
+      // Seek 后重置结束标记
+      isEndingRef.current = false;
     },
     [currentTime, duration, danmakuLayer],
   );
@@ -444,6 +456,24 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
             setIsBuffering(false);
             setIsPlaying(true);
             setIsStopped(false);
+
+            // 关键修复：通过进度判断播放结束，比状态更可靠
+            // 如果剩余时间少于 1 秒 或 播放进度超过 99%
+            if (duration > 0 && (duration - newCurrentTime < 1000 || newCurrentTime / duration > 0.99)) {
+                if (!isEndingRef.current) {
+                    isEndingRef.current = true;
+                    if (hasNextEpisodeRef.current) {
+                         // 延迟 500ms 跳转，避免瞬时跳
+                         if (autoNextEpisodeTimer.current) clearTimeout(autoNextEpisodeTimer.current);
+                         autoNextEpisodeTimer.current = setTimeout(() => {
+                             handleNextEpisode();
+                         }, 500);
+                    } else {
+                         setIsStopped(true);
+                         setIsPlaying(false);
+                    }
+                }
+            }
           }}
           onVideoStateChange={async (e) => {
             const { state } = e.nativeEvent;
@@ -462,13 +492,16 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
               return;
             }
 
-            // 关键修复：使用 ref 读取最新状态，处理自动播放
+            // 保留 Ended 状态作为后备，但主要依赖 onVideoProgress
             if (state === 'Ended') {
               setIsPlaying(false);
-              if (hasNextEpisodeRef.current) {
-                handleNextEpisode();
-              } else {
-                setIsStopped(true);
+              if (!isEndingRef.current) {
+                  isEndingRef.current = true;
+                  if (hasNextEpisodeRef.current) {
+                      handleNextEpisode();
+                  } else {
+                      setIsStopped(true);
+                  }
               }
             }
           }}
