@@ -385,6 +385,7 @@ export class EmbyAdapter implements MediaAdapter {
               width: stream.Width,
               height: stream.Height,
               bitRate: stream.BitRate,
+              // Video specific
               averageFrameRate: stream.AverageFrameRate,
               realFrameRate: stream.RealFrameRate,
               profile: stream.Profile,
@@ -394,6 +395,7 @@ export class EmbyAdapter implements MediaAdapter {
               isInterlaced: stream.IsInterlaced,
               aspectRatio: stream.AspectRatio,
               videoRange: stream.VideoRange,
+              // Audio specific
               channels: stream.Channels,
               channelLayout: stream.ChannelLayout,
               sampleRate: stream.SampleRate,
@@ -596,6 +598,7 @@ export class EmbyAdapter implements MediaAdapter {
     }
 
     const { preferBackdrop, preferBanner, preferLogo, preferThumb, width } = opts ?? {};
+    const inheritThumb = true;
     const tag = '';
 
     const itemData = baseItemCandidate;
@@ -603,6 +606,7 @@ export class EmbyAdapter implements MediaAdapter {
     let imgType: string = 'Primary';
     let imgTag;
     let itemId: string | null | undefined = itemData.Id;
+    let height;
 
     const shape = isPerson(itemData) ? CardShapes.Portrait : getShapeFromItemType(itemData.Type);
 
@@ -648,12 +652,41 @@ export class EmbyAdapter implements MediaAdapter {
       imgType = ImageType.Backdrop;
       imgTag = itemData.ParentBackdropImageTags[0];
       itemId = itemData.ParentBackdropItemId;
+    } else if (preferThumb && itemData.SeriesThumbImageTag && inheritThumb) {
+      imgType = ImageType.Thumb;
+      imgTag = itemData.SeriesThumbImageTag;
+      itemId = itemData.SeriesId;
+    } else if (
+      preferThumb &&
+      itemData.ParentThumbItemId &&
+      inheritThumb &&
+      itemData.MediaType !== 'Photo'
+    ) {
+      imgType = ImageType.Thumb;
+      imgTag = itemData.ParentThumbImageTag;
+      itemId = itemData.ParentThumbItemId;
+    } else if (preferThumb && itemData.BackdropImageTags?.length) {
+      imgType = ImageType.Backdrop;
+      imgTag = itemData.BackdropImageTags[0];
+    } else if (
+      preferThumb &&
+      itemData.ParentBackdropImageTags?.length &&
+      inheritThumb &&
+      itemData.Type === BaseItemKind.Episode
+    ) {
+      imgType = ImageType.Backdrop;
+      imgTag = itemData.ParentBackdropImageTags[0];
+      itemId = itemData.ParentBackdropItemId;
     } else if (
       itemData.ImageTags?.Primary &&
       (itemData.Type !== BaseItemKind.Episode || itemData.ChildCount !== 0)
     ) {
       imgType = ImageType.Primary;
       imgTag = itemData.ImageTags.Primary;
+      height =
+        width && itemData.PrimaryImageAspectRatio
+          ? Math.round(width / itemData.PrimaryImageAspectRatio)
+          : undefined;
     } else if (itemData.SeriesPrimaryImageTag) {
       imgType = ImageType.Primary;
       imgTag = itemData.SeriesPrimaryImageTag;
@@ -666,12 +699,31 @@ export class EmbyAdapter implements MediaAdapter {
       imgType = ImageType.Primary;
       imgTag = itemData.AlbumPrimaryImageTag;
       itemId = itemData.AlbumId;
+      height =
+        width && itemData.PrimaryImageAspectRatio
+          ? Math.round(width / itemData.PrimaryImageAspectRatio)
+          : undefined;
+    } else if (itemData.Type === BaseItemKind.Season && itemData.ImageTags?.Thumb) {
+      imgType = ImageType.Thumb;
+      imgTag = itemData.ImageTags.Thumb;
     } else if (itemData.BackdropImageTags?.length) {
       imgType = ImageType.Backdrop;
       imgTag = itemData.BackdropImageTags[0];
     } else if (itemData.ImageTags?.Thumb) {
       imgType = ImageType.Thumb;
       imgTag = itemData.ImageTags.Thumb;
+    } else if (itemData.SeriesThumbImageTag && inheritThumb) {
+      imgType = ImageType.Thumb;
+      imgTag = itemData.SeriesThumbImageTag;
+      itemId = itemData.SeriesId;
+    } else if (itemData.ParentThumbItemId && inheritThumb) {
+      imgType = ImageType.Thumb;
+      imgTag = itemData.ParentThumbImageTag;
+      itemId = itemData.ParentThumbItemId;
+    } else if (itemData.ParentBackdropImageTags?.length && inheritThumb) {
+      imgType = ImageType.Backdrop;
+      imgTag = itemData.ParentBackdropImageTags[0];
+      itemId = itemData.ParentBackdropItemId;
     }
 
     if (!imgTag) {
@@ -755,7 +807,6 @@ export class EmbyAdapter implements MediaAdapter {
   }
 
   async addFavoriteItem({ userId, itemId }: UpdateFavoriteItemParams): Promise<void> {
-    // Emby API requires a POST with empty body for this endpoint on some versions
     await getEmbyApiClient().post(`/Users/${userId}/FavoriteItems/${itemId}`, {});
   }
 
@@ -766,7 +817,7 @@ export class EmbyAdapter implements MediaAdapter {
   async markItemPlayed({ userId, itemId, datePlayed }: MarkItemPlayedParams): Promise<void> {
     const qs = new URLSearchParams();
     if (datePlayed) qs.set('DatePlayed', datePlayed);
-    // Emby 标记已看必须传空 JSON 对象，否则会报 400 或不生效
+    // 关键修复：Emby 标记已看必须传空 JSON 对象 {}，否则会报 400 或不生效
     await getEmbyApiClient().post(`/Users/${userId}/PlayedItems/${itemId}?${qs.toString()}`, {});
   }
 
