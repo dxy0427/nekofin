@@ -46,6 +46,7 @@ export const getSubtitle = (item: MediaItem) => {
   return item.name;
 };
 
+// 比较函数：只在关键数据变化时更新
 const arePropsEqual = (prevProps: any, nextProps: any) => {
   return (
     prevProps.item.id === nextProps.item.id &&
@@ -136,7 +137,8 @@ export const EpisodeCard = React.memo(
         ? currentUserData.playedPercentage
         : undefined;
 
-    const isPlayed = currentUserData?.played === true;
+    // 关键修复：如果 played 为 true 或者进度超过 95%，都视为已看，显示绿勾
+    const isPlayed = currentUserData?.played === true || (playedPercentage !== undefined && playedPercentage > 95);
 
     const handleLongPressStart = useCallback(() => {
       setIsLongPressing(true);
@@ -188,11 +190,13 @@ export const EpisodeCard = React.memo(
               ) : (
                 <PlayButton />
               ))}
+            {/* 已看状态显示绿勾 */}
             {isPlayed && (
               <View style={styles.playedOverlay}>
                 <Ionicons name="checkmark-circle" size={24} color={accentColor} />
               </View>
             )}
+            {/* 未完全看完显示进度条 */}
             {playedPercentage !== undefined && !isPlayed && (
               <View style={styles.progressContainer}>
                 <View style={styles.progressBackground}>
