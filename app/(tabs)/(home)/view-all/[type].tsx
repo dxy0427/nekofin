@@ -42,6 +42,7 @@ export default function ViewAllScreen() {
 
   const query = useInfiniteQuery({
     enabled: !!currentServer,
+    // 关键：filters 必须包含在 key 中
     queryKey: ['viewall', type, currentServer?.id, folderId, filters],
     initialPageParam: 0,
     queryFn: async () => {
