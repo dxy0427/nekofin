@@ -1,6 +1,7 @@
 import { useMediaAdapter } from '@/hooks/useMediaAdapter';
 import { useMediaServers } from '@/lib/contexts/MediaServerContext';
 import { MediaItem, MediaUserData } from '@/services/media/types';
+import { useQueryClient } from '@tanstack/react-query';
 import { useRouter } from 'expo-router';
 import { useEffect, useState } from 'react';
 
@@ -8,6 +9,7 @@ export function useMediaActions(item: MediaItem) {
   const router = useRouter();
   const { currentServer } = useMediaServers();
   const mediaAdapter = useMediaAdapter();
+  const queryClient = useQueryClient();
 
   const [localUserData, setLocalUserData] = useState<MediaUserData | null>(null);
   const [isUpdating, setIsUpdating] = useState(false);
@@ -30,7 +32,7 @@ export function useMediaActions(item: MediaItem) {
   const handleAddToFavorites = async () => {
     if (!item.id || !currentServer || isUpdating) return;
 
-    // 乐观更新：立即设置 UI 状态
+    // 乐观更新
     setLocalUserData((prev) => ({
       ...prev,
       isFavorite: true,
@@ -42,8 +44,10 @@ export function useMediaActions(item: MediaItem) {
         userId: currentServer.userId,
         itemId: item.id,
       });
+      // 成功后刷新缓存，确保 UI 状态和服务器一致
+      queryClient.invalidateQueries({ queryKey: ['itemDetail', item.id] });
+      queryClient.invalidateQueries({ queryKey: ['favorites'] });
     } catch (error) {
-      // 失败回滚
       setLocalUserData((prev) => ({
         ...prev,
         isFavorite: false,
@@ -71,8 +75,11 @@ export function useMediaActions(item: MediaItem) {
         itemId: item.id,
         datePlayed: new Date().toISOString(),
       });
+      // 关键修复：刷新缓存
+      queryClient.invalidateQueries({ queryKey: ['itemDetail', item.id] });
+      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['homeSections'] });
     } catch (error) {
-      // 失败回滚
       setLocalUserData((prev) => ({
         ...prev,
         played: false,
@@ -100,8 +107,11 @@ export function useMediaActions(item: MediaItem) {
         userId: currentServer.userId,
         itemId: item.id,
       });
+      // 关键修复：刷新缓存
+      queryClient.invalidateQueries({ queryKey: ['itemDetail', item.id] });
+      queryClient.invalidateQueries({ queryKey: ['episodes'] });
+      queryClient.invalidateQueries({ queryKey: ['homeSections'] });
     } catch (error) {
-      // 失败回滚
       setLocalUserData((prev) => ({
         ...prev,
         played: true,
