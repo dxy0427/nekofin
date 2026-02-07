@@ -9,7 +9,7 @@ interface UsePlaybackSyncProps {
   itemDetail: MediaItem | null;
   currentTime: SharedValue<number>;
   playSessionId: string | null;
-  isPlaying: boolean; // 新增：必须传入播放状态
+  isPlaying: boolean;
 }
 
 export const usePlaybackSync = ({
@@ -65,7 +65,6 @@ export const usePlaybackSync = ({
     [mediaAdapter, currentServer, itemDetail, playSessionId],
   );
 
-  // 关键修复：监听 isPlaying，只在真正开始播放时发送 Start
   useEffect(() => {
     if (isPlaying && !hasStartedRef.current && currentServer && itemDetail && playSessionId) {
       const startPos = currentTime.value;
