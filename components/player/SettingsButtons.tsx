@@ -58,22 +58,19 @@ export function SettingsButtons({ style }: SettingsButtonsProps) {
     // 优先使用 SeriesName (番剧名)，如果是电影则用 Name
     if (currentItem) {
       keyword = currentItem.seriesName || currentItem.name || '';
-      // 修复：如果 parentIndexNumber (季号) 大于 1，尝试追加 Season X 或 第X季
-      // DandanPlay 搜索通常支持 "番名 第X季" 或 "番名 Season X"
-      if (currentItem.parentIndexNumber && currentItem.parentIndexNumber > 1) {
-          keyword += ` Season ${currentItem.parentIndexNumber}`;
-      }
+      // 修改：格式化为 S{季}E{集}，例如 "一念永恒 S2E1"
+      const season = currentItem.parentIndexNumber ?? 1;
+      const episode = currentItem.indexNumber ?? 1;
+      keyword += ` S${season}E${episode}`;
     } else if (title) {
-      // 降级处理：尝试从标题字符串提取，例如 "番剧名 S03E01 - 标题"
-      // 简单切分 Sxx 前面的部分
-      const match = title.match(/^(.*?) S(\d+)/);
+      // 降级处理：尝试从标题字符串提取，例如 "番剧名 S2E1 - 标题"
+      // 尝试匹配 "SxxExx" 或 "Sxx Exx"
+      const match = title.match(/^(.*?) S(\d+)E(\d+)/);
       if (match) {
           const seriesName = match[1];
           const seasonNum = parseInt(match[2], 10);
-          keyword = seriesName;
-          if (seasonNum > 1) {
-              keyword += ` Season ${seasonNum}`;
-          }
+          const episodeNum = parseInt(match[3], 10);
+          keyword = `${seriesName} S${seasonNum}E${episodeNum}`;
       } else {
           // 兜底
           keyword = title.split(' -')[0];
