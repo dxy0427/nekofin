@@ -1,14 +1,12 @@
 import { BottomSheetBackdropModal } from '@/components/BottomSheetBackdropModal';
 import { ThemedText } from '@/components/ThemedText';
+import { useGroupOrder } from '@/lib/contexts/GroupOrderContext';
 import { useSettingsColors } from '@/hooks/useSettingsColors';
 import Ionicons from '@expo/vector-icons/Ionicons';
 import { BottomSheetModal, BottomSheetView } from '@gorhom/bottom-sheet';
 import React, { useCallback, useImperativeHandle, useRef } from 'react';
 import { StyleSheet, TouchableOpacity, View } from 'react-native';
 
-import { useGroupOrder } from '@/hooks/useGroupOrder';
-
-// 类型名称映射
 const TITLE_MAP: Record<string, string> = {
   Movie: '电影',
   Series: '剧集',
