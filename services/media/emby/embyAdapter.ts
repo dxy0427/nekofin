@@ -289,7 +289,8 @@ export class EmbyAdapter implements MediaAdapter {
       Recursive: true,
       Filters: 'IsFavorite',
       Limit: limit,
-      IncludeItemTypes: 'Movie,Series,Episode',
+      // 修复：包含 BoxSet
+      IncludeItemTypes: 'Movie,Series,Episode,BoxSet,Season',
       SortBy: 'DateCreated',
       SortOrder: 'Descending',
       ...Object.fromEntries(baseParams.entries()),
@@ -313,6 +314,12 @@ export class EmbyAdapter implements MediaAdapter {
   }> {
     const baseParams = new URLSearchParams();
     applyDefaultImageAndFields(baseParams);
+    
+    // 修复：确保默认包含 BoxSet 和 Season
+    const types = includeItemTypes?.length 
+      ? includeItemTypes.join(',') 
+      : 'Movie,Series,Episode,BoxSet,Season';
+
     const res = await getEmbyApiClient().get<{ Items?: BaseItemDto[]; TotalRecordCount?: number }>(
       `/Users/${userId}/Items`,
       {
@@ -321,7 +328,7 @@ export class EmbyAdapter implements MediaAdapter {
         Limit: limit,
         Recursive: true,
         Filters: onlyUnplayed ? 'IsFavorite,IsUnplayed' : 'IsFavorite',
-        IncludeItemTypes: includeItemTypes?.join(','),
+        IncludeItemTypes: types,
         SortBy: convertSortByToEmby(sortBy || []).join(','),
         SortOrder: sortOrder,
         Years: year,
