@@ -113,9 +113,12 @@ export function ItemGridScreen({
       if (!typeToItems[key]) typeToItems[key] = [];
       typeToItems[key].push(item);
     });
-    const order = ['Series', 'Movie', 'Episode', 'MusicVideo', 'Other'];
+    // 修复：添加 BoxSet 和 Season 到排序和标题映射中
+    const order = ['BoxSet', 'Series', 'Season', 'Movie', 'Episode', 'MusicVideo', 'Other'];
     const titleMap: Record<string, string> = {
+      BoxSet: '合集',
       Series: '剧集',
+      Season: '季度',
       Movie: '电影',
       Episode: '单集',
       MusicVideo: '音乐视频',
@@ -423,7 +426,8 @@ export function ItemGridScreen({
         onEndReachedThreshold={0.4}
         contentContainerStyle={[
           styles.listContainer,
-          { paddingBottom: Platform.OS === 'android' ? 100 : 0 },
+          // 修复：针对 List 模式增加底部 Padding，确保 TabBar 不遮挡
+          { paddingBottom: 160 },
         ]}
         ListHeaderComponent={renderFilterBar()}
         ListFooterComponent={listFooter}
@@ -440,7 +444,8 @@ export function ItemGridScreen({
   return (
     <ScrollView
       style={{ backgroundColor }}
-      contentContainerStyle={styles.scrollContainer}
+      // 修复：针对 ScrollView 模式增加底部 Padding，确保 TabBar 不遮挡
+      contentContainerStyle={[styles.scrollContainer, { paddingBottom: 160 }]}
       showsVerticalScrollIndicator={false}
       contentInsetAdjustmentBehavior="automatic"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
