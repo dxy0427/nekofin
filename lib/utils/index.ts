@@ -87,43 +87,54 @@ export const getCommentsByItem = async (
     return { comments: [], episodeInfo: undefined };
   }
 
-  // 修复：自动搜索时加上季号，提高匹配准确率
-  let searchKeyword = seriesName ?? '';
-  if (seasonNumber > 1) {
-      searchKeyword += ` Season ${seasonNumber}`;
-  }
-
+  // 策略 1: 使用 S{季}E{集} 格式搜索，如 "一念永恒 S2E1"
+  let searchKeyword = `${seriesName} S${seasonNumber}E${episodeNumber}`;
   let animes = await searchAnimesByKeyword(baseUrl, searchKeyword);
   
-  // 如果加了 Season 没搜到，再尝试只用剧名搜（降级策略）
+  // 策略 2: 如果搜不到，尝试仅带季号 "一念永恒 S2"
   if (animes.length === 0 && seasonNumber > 1) {
+      animes = await searchAnimesByKeyword(baseUrl, `${seriesName} S${seasonNumber}`);
+  }
+
+  // 策略 3: 如果还搜不到，尝试仅带剧名
+  if (animes.length === 0) {
       animes = await searchAnimesByKeyword(baseUrl, seriesName ?? '');
   }
 
+  // 策略 4: 最后尝试原名
   if (animes.length === 0) {
     animes = await searchAnimesByKeyword(baseUrl, originalTitle ?? '');
   }
+
   if (animes.length === 0) {
     return { comments: [], episodeInfo: undefined };
   }
   
   // 此时 animes 可能包含多季，通常第一项就是最匹配的（因为我们用了 precise keyword）
-  // 注意：如果降级到了只用剧名搜，animes[0] 可能是第一季。这里无法做到100%完美，
-  // 但加上 Season 关键字后，第一项大概率是正确的季度。
   const anime = animes[0]; 
   
   if (anime && episodeNumber) {
     // 检查 episodeNumber 是否越界
-    if (episodeNumber - 1 < anime.episodes.length) {
+    // 注意：如果是用 S2E1 搜到的，可能返回的 anime 下面只有 1 集，或者是整个 S2 的列表
+    // 这里假设返回的是列表
+    let targetEpIndex = episodeNumber - 1;
+    
+    // 如果返回的剧集数量少于 index，可能是只搜到了单集（S2E1），此时尝试取第0个
+    if (targetEpIndex >= anime.episodes.length && anime.episodes.length === 1) {
+        // 这种情况下，可能直接命中了单集条目
+        targetEpIndex = 0;
+    }
+
+    if (targetEpIndex < anime.episodes.length) {
         const comments = await getCommentsByEpisodeId(
           baseUrl,
-          anime.episodes[episodeNumber - 1].episodeId,
+          anime.episodes[targetEpIndex].episodeId,
         );
         return {
           comments,
           episodeInfo: {
             animeTitle: anime.animeTitle,
-            episodeTitle: anime.episodes[episodeNumber - 1].episodeTitle,
+            episodeTitle: anime.episodes[targetEpIndex].episodeTitle,
           },
         };
     }
