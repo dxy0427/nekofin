@@ -46,6 +46,17 @@ export const getSubtitle = (item: MediaItem) => {
   return item.name;
 };
 
+// 比较函数：只在关键数据变化时更新
+const arePropsEqual = (prevProps: any, nextProps: any) => {
+  return (
+    prevProps.item.id === nextProps.item.id &&
+    prevProps.item.userData?.played === nextProps.item.userData?.played &&
+    prevProps.item.userData?.playedPercentage === nextProps.item.userData?.playedPercentage &&
+    prevProps.style === nextProps.style &&
+    prevProps.disabled === nextProps.disabled
+  );
+};
+
 export const EpisodeCard = React.memo(
   function EpisodeCard({
     item,
@@ -263,15 +274,7 @@ export const EpisodeCard = React.memo(
       </Menu>
     );
   },
-  (prevProps, nextProps) => {
-    return (
-      prevProps.item.id === nextProps.item.id &&
-      prevProps.item.userData?.played === nextProps.item.userData?.played &&
-      prevProps.item.userData?.playedPercentage === nextProps.item.userData?.playedPercentage &&
-      prevProps.style === nextProps.style &&
-      prevProps.disabled === nextProps.disabled
-    );
-  },
+  arePropsEqual
 );
 
 export const SeriesCard = React.memo(
@@ -413,6 +416,7 @@ export const SeriesCard = React.memo(
       </Menu>
     );
   },
+  arePropsEqual // 同样使用自定义比较函数
 );
 
 const styles = StyleSheet.create({
