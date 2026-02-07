@@ -70,10 +70,11 @@ export function useMediaActions(item: MediaItem) {
     setIsUpdating(true);
 
     try {
+      // 修复：不传递 datePlayed，让服务器使用当前时间
+      // 传递自定义时间可能会因为格式问题导致 Emby 接口调用成功但状态未更新
       await mediaAdapter.markItemPlayed({
         userId: currentServer.userId,
         itemId: item.id,
-        datePlayed: new Date().toISOString(),
       });
       // 关键修复：刷新缓存
       queryClient.invalidateQueries({ queryKey: ['itemDetail', item.id] });
