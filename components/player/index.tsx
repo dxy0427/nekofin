@@ -457,9 +457,10 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
             setIsPlaying(true);
             setIsStopped(false);
 
-            // 关键修复：通过进度判断播放结束，比状态更可靠
-            // 如果剩余时间少于 1 秒 或 播放进度超过 99%
-            if (duration > 0 && (duration - newCurrentTime < 1000 || newCurrentTime / duration > 0.99)) {
+            // 关键修复：修改了判定条件
+            // 删除了百分比检查（99%在长视频中会导致提前十几秒跳转）
+            // 仅当剩余时间少于 0.5 秒时才认为播放结束
+            if (duration > 0 && (duration - newCurrentTime < 500)) {
                 if (!isEndingRef.current) {
                     isEndingRef.current = true;
                     if (hasNextEpisodeRef.current) {
