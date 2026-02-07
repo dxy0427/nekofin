@@ -3,12 +3,10 @@ import { useGridLayout } from '@/hooks/useGridLayout';
 import { useMediaAdapter } from '@/hooks/useMediaAdapter';
 import { MediaFilters } from '@/hooks/useMediaFilters';
 import useRefresh from '@/hooks/useRefresh';
-import { useThemeColor } from '@/hooks/useThemeColor';
+import { useSettingsColors } from '@/hooks/useSettingsColors';
 import { useMediaServers } from '@/lib/contexts/MediaServerContext';
-import { useAccentColor } from '@/lib/contexts/ThemeColorContext';
 import { MediaItem, MediaSortBy } from '@/services/media/types';
 import { InfiniteData, UseInfiniteQueryResult, useQuery } from '@tanstack/react-query';
-import { GlassContainer } from 'expo-glass-effect';
 import { useNavigation } from 'expo-router';
 import React, { useCallback, useEffect, useMemo } from 'react';
 import {
@@ -39,7 +37,6 @@ export type ItemGridScreenProps = {
   filters?: MediaFilters;
   onChangeFilters?: (next: MediaFilters) => void;
   disableGrouping?: boolean;
-  // 新增属性：接受自定义分组顺序
   groupOrder?: string[];
 };
 
@@ -54,9 +51,7 @@ export function ItemGridScreen({
   groupOrder,
 }: ItemGridScreenProps) {
   const insets = useSafeAreaInsets();
-  const backgroundColor = useThemeColor({ light: '#fff', dark: '#000' }, 'background');
-  const textColor = useThemeColor({ light: '#000', dark: '#fff' }, 'text');
-  const { accentColor } = useAccentColor();
+  const { backgroundColor, textColor, accentColor } = useSettingsColors();
   const { numColumns, itemWidth, gap } = useGridLayout(type);
   const episodeLayout = useGridLayout('episode');
 
@@ -117,7 +112,6 @@ export function ItemGridScreen({
       typeToItems[key].push(item);
     });
 
-    // 优先使用传入的 groupOrder，否则使用默认顺序
     const order = groupOrder || [
       'Movie',
       'Series',
@@ -194,9 +188,8 @@ export function ItemGridScreen({
         </View>
       );
     }
-    if (!hasNextPage) return <View style={{ height: 16 }} />;
     return <View style={{ height: 16 }} />;
-  }, [query, isFetchingNextPage, hasNextPage, accentColor]);
+  }, [query, isFetchingNextPage, accentColor]);
 
   useEffect(() => {
     navigation.setOptions({ title });
@@ -205,154 +198,113 @@ export function ItemGridScreen({
   const renderFilterBar = useCallback(() => {
     if (!onChangeFilters) return null;
 
+    // 移除 GlassContainer 以优化性能
     return (
       <View style={styles.filterBar}>
         <ScrollView
-          style={{
-            marginHorizontal: -20,
-            paddingVertical: 40,
-            position: 'absolute',
-            top: -50,
-            width: '200%',
-          }}
           horizontal
           showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.filterRow}
         >
-          <GlassContainer spacing={10} style={[styles.filterRow]}>
-            <FilterButton
-              label="年份"
-              title="选择年份"
-              options={[
-                { label: '不限' },
-                ...(availableFilters?.years ?? []).map((y) => ({
-                  label: String(y),
-                  value: String(y),
-                  active: filters?.year === y,
-                })),
-              ]}
-              onSelect={(v) => {
-                onChangeFilters?.({
-                  includeItemTypes: filters?.includeItemTypes,
-                  sortBy: filters?.sortBy,
-                  sortOrder: filters?.sortOrder,
-                  year: v ? Number(v) : undefined,
-                  tags: filters?.tags,
-                  onlyUnplayed: filters?.onlyUnplayed,
+          <FilterButton
+            label="年份"
+            title="选择年份"
+            options={[
+              { label: '不限' },
+              ...(availableFilters?.years ?? []).map((y) => ({
+                label: String(y),
+                value: String(y),
+                active: filters?.year === y,
+              })),
+            ]}
+            onSelect={(v) => {
+              onChangeFilters({
+                ...filters,
+                year: v ? Number(v) : undefined,
+              });
+            }}
+          />
+          <FilterButton
+            label="标签"
+            title="选择标签"
+            options={[
+              { label: '不限' },
+              ...(availableFilters?.tags ?? []).map((t) => ({
+                label: t,
+                value: t,
+                active: !!filters?.tags?.includes(t),
+              })),
+            ]}
+            onSelect={(v) => {
+              onChangeFilters({
+                ...filters,
+                tags: v ? [v] : undefined,
+              });
+            }}
+          />
+          <FilterButton
+            label="排序依据"
+            title="选择排序依据"
+            options={[
+              {
+                label: '名称',
+                value: 'SortName',
+                active: (filters?.sortBy?.[0] ?? 'SortName') === 'SortName',
+              },
+              {
+                label: '创建日期',
+                value: 'DateCreated',
+                active: (filters?.sortBy?.[0] ?? '') === 'DateCreated',
+              },
+              {
+                label: '首映日期',
+                value: 'PremiereDate',
+                active: (filters?.sortBy?.[0] ?? '') === 'PremiereDate',
+              },
+              {
+                label: '评分',
+                value: 'CommunityRating',
+                active: (filters?.sortBy?.[0] ?? '') === 'CommunityRating',
+              },
+              {
+                label: '播放日期',
+                value: 'DatePlayed',
+                active: (filters?.sortBy?.[0] ?? '') === 'DatePlayed',
+              },
+            ]}
+            onSelect={(v) => {
+              if (v) {
+                onChangeFilters({
+                  ...filters,
+                  sortBy: [v as MediaSortBy],
                 });
-              }}
-            />
-            <FilterButton
-              label="标签"
-              title="选择标签"
-              options={[
-                { label: '不限' },
-                ...(availableFilters?.tags ?? []).map((t) => ({
-                  label: t,
-                  value: t,
-                  active: !!filters?.tags?.includes(t),
-                })),
-              ]}
-              onSelect={(v) => {
-                if (!v) {
-                  onChangeFilters?.({
-                    includeItemTypes: filters?.includeItemTypes,
-                    sortBy: filters?.sortBy,
-                    sortOrder: filters?.sortOrder,
-                    year: filters?.year,
-                    tags: undefined,
-                    onlyUnplayed: filters?.onlyUnplayed,
-                  });
-                } else {
-                  const nextTags = [v];
-                  onChangeFilters?.({
-                    includeItemTypes: filters?.includeItemTypes,
-                    sortBy: filters?.sortBy,
-                    sortOrder: filters?.sortOrder,
-                    year: filters?.year,
-                    tags: nextTags,
-                    onlyUnplayed: filters?.onlyUnplayed,
-                  });
-                }
-              }}
-            />
-            <FilterButton
-              label="排序依据"
-              title="选择排序依据"
-              options={[
-                {
-                  label: '名称',
-                  value: 'SortName',
-                  active: (filters?.sortBy?.[0] ?? 'SortName') === 'SortName',
-                },
-                {
-                  label: '随机',
-                  value: 'Random',
-                  active: (filters?.sortBy?.[0] ?? '') === 'Random',
-                },
-                {
-                  label: '公众评分',
-                  value: 'CommunityRating',
-                  active: (filters?.sortBy?.[0] ?? '') === 'CommunityRating',
-                },
-                {
-                  label: '剧集添加日期',
-                  value: 'DateCreated',
-                  active: (filters?.sortBy?.[0] ?? '') === 'DateCreated',
-                },
-                {
-                  label: '播放日期',
-                  value: 'DatePlayed',
-                  active: (filters?.sortBy?.[0] ?? '') === 'DatePlayed',
-                },
-                {
-                  label: '家长分级',
-                  value: 'OfficialRating',
-                  active: (filters?.sortBy?.[0] ?? '') === 'OfficialRating',
-                },
-                {
-                  label: '发行日期',
-                  value: 'PremiereDate',
-                  active: (filters?.sortBy?.[0] ?? '') === 'PremiereDate',
-                },
-              ]}
-              onSelect={(v) => {
-                onChangeFilters?.({
-                  includeItemTypes: filters?.includeItemTypes,
-                  sortBy: v ? [v as MediaSortBy] : filters?.sortBy,
-                  sortOrder: filters?.sortOrder,
-                  year: filters?.year,
-                  tags: filters?.tags,
-                  onlyUnplayed: filters?.onlyUnplayed,
+              }
+            }}
+          />
+          <FilterButton
+            label="排序顺序"
+            title="选择排序顺序"
+            options={[
+              {
+                label: '降序',
+                value: 'Descending',
+                active: (filters?.sortOrder ?? 'Descending') === 'Descending',
+              },
+              {
+                label: '升序',
+                value: 'Ascending',
+                active: (filters?.sortOrder ?? 'Descending') === 'Ascending',
+              },
+            ]}
+            onSelect={(v) => {
+              if (v) {
+                onChangeFilters({
+                  ...filters,
+                  sortOrder: v as 'Ascending' | 'Descending',
                 });
-              }}
-            />
-            <FilterButton
-              label="排序顺序"
-              title="选择排序顺序"
-              options={[
-                {
-                  label: '降序',
-                  value: 'Descending',
-                  active: (filters?.sortOrder ?? 'Descending') === 'Descending',
-                },
-                {
-                  label: '升序',
-                  value: 'Ascending',
-                  active: (filters?.sortOrder ?? 'Descending') === 'Ascending',
-                },
-              ]}
-              onSelect={(v) => {
-                onChangeFilters?.({
-                  includeItemTypes: filters?.includeItemTypes,
-                  sortBy: filters?.sortBy,
-                  sortOrder: (v as 'Ascending' | 'Descending') ?? filters?.sortOrder,
-                  year: filters?.year,
-                  tags: filters?.tags,
-                  onlyUnplayed: filters?.onlyUnplayed,
-                });
-              }}
-            />
-          </GlassContainer>
+              }
+            }}
+          />
         </ScrollView>
       </View>
     );
@@ -386,15 +338,14 @@ export function ItemGridScreen({
             showsHorizontalScrollIndicator={false}
             style={styles.horizontalList}
             contentContainerStyle={styles.horizontalListContainer}
-            contentInsetAdjustmentBehavior="never"
+            initialNumToRender={4}
+            windowSize={3}
             ItemSeparatorComponent={() => <View style={{ width: 16 }} />}
-            onEndReached={handleEndReached}
-            onEndReachedThreshold={0.4}
           />
         </View>
       );
     },
-    [episodeLayout.itemWidth, itemWidth, textColor, keyExtractor, handleEndReached, useThreeCols],
+    [episodeLayout.itemWidth, itemWidth, textColor, keyExtractor, useThreeCols],
   );
 
   if (query && isLoading) {
@@ -439,8 +390,7 @@ export function ItemGridScreen({
         onEndReachedThreshold={0.4}
         contentContainerStyle={[
           styles.listContainer,
-          // 修复：针对 List 模式增加底部 Padding，确保 TabBar 不遮挡
-          { paddingBottom: 160 },
+          { paddingBottom: 160 }, // 增加底部 padding
         ]}
         ListHeaderComponent={renderFilterBar()}
         ListFooterComponent={listFooter}
@@ -450,6 +400,10 @@ export function ItemGridScreen({
           </View>
         }
         style={{ backgroundColor }}
+        removeClippedSubviews={true} // 性能优化
+        initialNumToRender={8} // 性能优化
+        maxToRenderPerBatch={8} // 性能优化
+        windowSize={5} // 性能优化
       />
     );
   }
@@ -457,11 +411,11 @@ export function ItemGridScreen({
   return (
     <ScrollView
       style={{ backgroundColor }}
-      // 修复：针对 ScrollView 模式增加底部 Padding，确保 TabBar 不遮挡
       contentContainerStyle={[styles.scrollContainer, { paddingBottom: 160 }]}
       showsVerticalScrollIndicator={false}
       contentInsetAdjustmentBehavior="automatic"
       refreshControl={<RefreshControl refreshing={refreshing} onRefresh={onRefresh} />}
+      removeClippedSubviews={true}
     >
       {renderFilterBar()}
 
@@ -487,15 +441,13 @@ const styles = StyleSheet.create({
     paddingVertical: 20,
   },
   filterBar: {
-    position: 'relative',
-    paddingBottom: 8,
-    height: 24,
+    marginBottom: 16,
   },
   filterRow: {
     flexDirection: 'row',
-    columnGap: 8,
-    alignItems: 'center',
+    gap: 10,
     paddingHorizontal: 20,
+    paddingVertical: 4,
   },
   listContainer: {
     paddingHorizontal: 20,
@@ -510,9 +462,6 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     marginBottom: 8,
   },
-  groupListContainer: {
-    rowGap: 16,
-  },
   horizontalListContainer: {
     paddingLeft: 20,
     paddingRight: 20,
@@ -520,11 +469,6 @@ const styles = StyleSheet.create({
   },
   horizontalList: {
     marginHorizontal: -20,
-  },
-  loadingContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
   },
   errorContainer: {
     flex: 1,
@@ -551,6 +495,7 @@ const styles = StyleSheet.create({
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
+    paddingTop: 60,
   },
   emptyText: {
     fontSize: 16,
