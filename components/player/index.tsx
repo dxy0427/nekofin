@@ -18,7 +18,6 @@ import {
   VlcPlayerViewRef,
 } from '@/modules/vlc-player';
 import { DandanComment } from '@/services/dandanplay';
-import { SubtitleDeliveryMethod } from '@jellyfin/sdk/lib/generated-client/models';
 import { useQuery } from '@tanstack/react-query';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useRouter } from 'expo-router';
@@ -188,13 +187,12 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     return subs;
   }, [allSubs, currentApi?.basePath]);
 
-  // 关键修复：传递 isPlaying，确保播放开始时触发 SessionStart
   const { syncPlaybackProgress } = usePlaybackSync({
     currentServer,
     itemDetail: itemDetail ?? null,
     currentTime,
     playSessionId: streamInfo?.sessionId ?? null,
-    isPlaying: isPlaying, 
+    isPlaying,
   });
 
   const { data: episodes = [] } = useQuery({
@@ -257,6 +255,52 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     if (!hasNextEpisode) return null;
     return episodes[currentEpisodeIndex + 1];
   }, [hasNextEpisode, episodes, currentEpisodeIndex]);
+
+  const handleNextEpisode = useCallback(() => {
+    if (nextEpisode?.id) {
+      setIsStopped(false);
+      setIsPlaying(false);
+      setIsBuffering(true);
+      setIsLoaded(false);
+      router.replace({
+        pathname: '/player',
+        params: {
+          itemId: nextEpisode.id,
+        },
+      });
+    }
+  }, [nextEpisode, router]);
+
+  const handlePreviousEpisode = useCallback(() => {
+    if (previousEpisode?.id) {
+      setIsStopped(false);
+      setIsPlaying(false);
+      setIsBuffering(true);
+      setIsLoaded(false);
+      router.replace({
+        pathname: '/player',
+        params: {
+          itemId: previousEpisode.id,
+        },
+      });
+    }
+  }, [previousEpisode, router]);
+
+  const handleEpisodeSelect = useCallback(
+    (episodeId: string) => {
+      setIsStopped(false);
+      setIsPlaying(false);
+      setIsBuffering(true);
+      setIsLoaded(false);
+      router.replace({
+        pathname: '/player',
+        params: {
+          itemId: episodeId,
+        },
+      });
+    },
+    [router],
+  );
 
   useEffect(() => {
     if (itemDetail?.userData?.playbackPositionTicks !== undefined) {
@@ -357,40 +401,6 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     [tracks?.subtitle],
   );
 
-  const handlePreviousEpisode = useCallback(() => {
-    if (previousEpisode?.id) {
-      router.replace({
-        pathname: '/player',
-        params: {
-          itemId: previousEpisode.id,
-        },
-      });
-    }
-  }, [previousEpisode, router]);
-
-  const handleNextEpisode = useCallback(() => {
-    if (nextEpisode?.id) {
-      router.replace({
-        pathname: '/player',
-        params: {
-          itemId: nextEpisode.id,
-        },
-      });
-    }
-  }, [nextEpisode, router]);
-
-  const handleEpisodeSelect = useCallback(
-    (episodeId: string) => {
-      router.replace({
-        pathname: '/player',
-        params: {
-          itemId: episodeId,
-        },
-      });
-    },
-    [router],
-  );
-
   return (
     <View style={styles.container}>
       {streamInfo?.url && initialTime >= 0 && (
@@ -436,6 +446,16 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
             if (state === 'Buffering') {
               setIsBuffering(true);
               return;
+            }
+
+            // 关键修复：处理播放结束状态，自动播放下一集
+            if (state === 'Ended') {
+              setIsPlaying(false);
+              if (hasNextEpisode) {
+                handleNextEpisode();
+              } else {
+                setIsStopped(true);
+              }
             }
           }}
           onVideoLoadEnd={() => {
