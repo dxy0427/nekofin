@@ -24,7 +24,8 @@ export default function FolderScreen() {
 
   const query = useInfiniteQuery({
     enabled: !!currentServer && !!id,
-    queryKey: ['folder-items', currentServer?.id, id, filters],
+    // 关键：filters 必须包含在 key 中
+    queryKey: ['folder-items', currentServer?.id, id, filters], 
     initialPageParam: 0,
     queryFn: async ({ pageParam = 0 }) => {
       if (!currentServer || !id) return { items: [], total: 0 };
