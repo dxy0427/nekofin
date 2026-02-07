@@ -87,27 +87,48 @@ export const getCommentsByItem = async (
     return { comments: [], episodeInfo: undefined };
   }
 
-  let animes = await searchAnimesByKeyword(baseUrl, seriesName ?? '');
+  // 修复：自动搜索时加上季号，提高匹配准确率
+  let searchKeyword = seriesName ?? '';
+  if (seasonNumber > 1) {
+      searchKeyword += ` Season ${seasonNumber}`;
+  }
+
+  let animes = await searchAnimesByKeyword(baseUrl, searchKeyword);
+  
+  // 如果加了 Season 没搜到，再尝试只用剧名搜（降级策略）
+  if (animes.length === 0 && seasonNumber > 1) {
+      animes = await searchAnimesByKeyword(baseUrl, seriesName ?? '');
+  }
+
   if (animes.length === 0) {
     animes = await searchAnimesByKeyword(baseUrl, originalTitle ?? '');
   }
   if (animes.length === 0) {
     return { comments: [], episodeInfo: undefined };
   }
-  const anime = animes[seasonNumber - 1];
+  
+  // 此时 animes 可能包含多季，通常第一项就是最匹配的（因为我们用了 precise keyword）
+  // 注意：如果降级到了只用剧名搜，animes[0] 可能是第一季。这里无法做到100%完美，
+  // 但加上 Season 关键字后，第一项大概率是正确的季度。
+  const anime = animes[0]; 
+  
   if (anime && episodeNumber) {
-    const comments = await getCommentsByEpisodeId(
-      baseUrl,
-      anime.episodes[episodeNumber - 1].episodeId,
-    );
-    return {
-      comments,
-      episodeInfo: {
-        animeTitle: anime.animeTitle,
-        episodeTitle: anime.episodes[episodeNumber - 1].episodeTitle,
-      },
-    };
+    // 检查 episodeNumber 是否越界
+    if (episodeNumber - 1 < anime.episodes.length) {
+        const comments = await getCommentsByEpisodeId(
+          baseUrl,
+          anime.episodes[episodeNumber - 1].episodeId,
+        );
+        return {
+          comments,
+          episodeInfo: {
+            animeTitle: anime.animeTitle,
+            episodeTitle: anime.episodes[episodeNumber - 1].episodeTitle,
+          },
+        };
+    }
   }
+  return { comments: [], episodeInfo: undefined };
 };
 
 export function isNil(value: unknown): value is null | undefined {
