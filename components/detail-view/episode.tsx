@@ -334,8 +334,9 @@ export const EpisodeModeContent = ({
   return (
     <>
       <View style={{ gap: 8 }}>
+        {/* 修复：显示季号和集号 SxxExx */}
         <ThemedText style={{ fontSize: 14, color: subtitleColor }}>
-          {`${selectedEpisode.seriesName} 第${selectedEpisode.indexNumber}集`}
+          {`${selectedEpisode.seriesName} S${selectedEpisode.parentIndexNumber ?? 1}E${selectedEpisode.indexNumber} - ${selectedEpisode.name}`}
         </ThemedText>
       </View>
 
