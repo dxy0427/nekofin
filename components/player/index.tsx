@@ -18,6 +18,7 @@ import {
   VlcPlayerViewRef,
 } from '@/modules/vlc-player';
 import { DandanComment } from '@/services/dandanplay';
+import { SubtitleDeliveryMethod } from '@jellyfin/sdk/lib/generated-client/models';
 import { useQuery } from '@tanstack/react-query';
 import { activateKeepAwakeAsync, deactivateKeepAwake } from 'expo-keep-awake';
 import { useRouter } from 'expo-router';
@@ -192,7 +193,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     itemDetail: itemDetail ?? null,
     currentTime,
     playSessionId: streamInfo?.sessionId ?? null,
-    isPlaying,
+    isPlaying, 
   });
 
   const { data: episodes = [] } = useQuery({
@@ -256,8 +257,19 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
     return episodes[currentEpisodeIndex + 1];
   }, [hasNextEpisode, episodes, currentEpisodeIndex]);
 
+  // 关键修复：使用 ref 保持最新的下一集状态，供闭包调用
+  const nextEpisodeRef = useRef(nextEpisode);
+  const hasNextEpisodeRef = useRef(hasNextEpisode);
+
+  useEffect(() => {
+    nextEpisodeRef.current = nextEpisode;
+    hasNextEpisodeRef.current = hasNextEpisode;
+  }, [nextEpisode, hasNextEpisode]);
+
   const handleNextEpisode = useCallback(() => {
-    if (nextEpisode?.id) {
+    const nextEp = nextEpisodeRef.current;
+    if (nextEp?.id) {
+      player.current?.stop();
       setIsStopped(false);
       setIsPlaying(false);
       setIsBuffering(true);
@@ -265,14 +277,15 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
       router.replace({
         pathname: '/player',
         params: {
-          itemId: nextEpisode.id,
+          itemId: nextEp.id,
         },
       });
     }
-  }, [nextEpisode, router]);
+  }, [router]);
 
   const handlePreviousEpisode = useCallback(() => {
     if (previousEpisode?.id) {
+      player.current?.stop();
       setIsStopped(false);
       setIsPlaying(false);
       setIsBuffering(true);
@@ -288,6 +301,7 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
 
   const handleEpisodeSelect = useCallback(
     (episodeId: string) => {
+      player.current?.stop();
       setIsStopped(false);
       setIsPlaying(false);
       setIsBuffering(true);
@@ -448,10 +462,10 @@ export const VideoPlayer = ({ itemId }: { itemId: string }) => {
               return;
             }
 
-            // 关键修复：处理播放结束状态，自动播放下一集
+            // 关键修复：使用 ref 读取最新状态，处理自动播放
             if (state === 'Ended') {
               setIsPlaying(false);
-              if (hasNextEpisode) {
+              if (hasNextEpisodeRef.current) {
                 handleNextEpisode();
               } else {
                 setIsStopped(true);
