@@ -166,7 +166,7 @@ export async function getFavoriteItems(api: Api, userId: string, limit: number =
     enableImageTypes: ['Primary', 'Backdrop', 'Thumb'],
     filters: ['IsFavorite'],
     recursive: true,
-    includeItemTypes: ['Movie', 'Series', 'Episode'],
+    includeItemTypes: ['Movie', 'Series', 'Episode', 'BoxSet', 'Season'],
   });
 }
 
@@ -197,7 +197,8 @@ export async function getFavoriteItemsPaged(
     enableImageTypes: ['Primary', 'Backdrop', 'Thumb'],
     filters,
     recursive: true,
-    includeItemTypes: opts?.includeItemTypes ?? ['Movie', 'Series', 'Episode'],
+    // 修复：确保包含 BoxSet 和 Season
+    includeItemTypes: opts?.includeItemTypes ?? ['Movie', 'Series', 'Episode', 'BoxSet', 'Season'],
     years: opts?.year ? [opts.year] : undefined,
     tags: opts?.tags,
   });
