@@ -12,7 +12,8 @@ export type MediaFilters = {
 
 export function createDefaultFilters(overrides?: Partial<MediaFilters>): MediaFilters {
   return {
-    includeItemTypes: ['Movie', 'Series', 'Episode'],
+    // 修复：加入 BoxSet (合集) 和 Season (季度)，确保收藏夹中能显示这些内容
+    includeItemTypes: ['Movie', 'Series', 'Episode', 'BoxSet', 'Season'],
     sortBy: ['DateCreated'],
     sortOrder: 'Descending',
     onlyUnplayed: false,
