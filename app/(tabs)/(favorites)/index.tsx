@@ -1,13 +1,25 @@
+import { GroupOrderSheet, GroupOrderSheetRef } from '@/components/media/GroupOrderSheet';
 import { ItemGridScreen } from '@/components/media/ItemGridScreen';
+import { useGroupOrder } from '@/hooks/useGroupOrder';
 import { useInfiniteQueryWithFocus } from '@/hooks/useInfiniteQueryWithFocus';
 import { useMediaAdapter } from '@/hooks/useMediaAdapter';
 import { useMediaFilters } from '@/hooks/useMediaFilters';
+import { useSettingsColors } from '@/hooks/useSettingsColors';
 import { useMediaServers } from '@/lib/contexts/MediaServerContext';
 import { MediaItem } from '@/services/media/types';
+import Ionicons from '@expo/vector-icons/Ionicons';
+import { useNavigation } from 'expo-router';
+import { useEffect, useRef } from 'react';
+import { TouchableOpacity, View } from 'react-native';
 
 export default function FavoritesScreen() {
   const { currentServer } = useMediaServers();
   const mediaAdapter = useMediaAdapter();
+  const navigation = useNavigation();
+  const { textColor } = useSettingsColors();
+  const { order } = useGroupOrder();
+  
+  const sortSheetRef = useRef<GroupOrderSheetRef>(null);
 
   const PAGE_SIZE = 40;
 
@@ -44,13 +56,30 @@ export default function FavoritesScreen() {
     },
   });
 
+  useEffect(() => {
+    navigation.setOptions({
+      headerLeft: () => (
+        <TouchableOpacity
+          onPress={() => sortSheetRef.current?.present()}
+          style={{ paddingHorizontal: 16 }}
+        >
+          <Ionicons name="list" size={24} color={textColor} />
+        </TouchableOpacity>
+      ),
+    });
+  }, [navigation, textColor]);
+
   return (
-    <ItemGridScreen
-      title="我的收藏"
-      query={query}
-      type="series"
-      filters={filters}
-      onChangeFilters={setFilters}
-    />
+    <>
+      <ItemGridScreen
+        title="我的收藏"
+        query={query}
+        type="series"
+        filters={filters}
+        onChangeFilters={setFilters}
+        groupOrder={order}
+      />
+      <GroupOrderSheet ref={sortSheetRef} />
+    </>
   );
 }
