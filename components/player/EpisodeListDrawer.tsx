@@ -28,7 +28,6 @@ export interface EpisodeListDrawerRef {
   dismiss: () => void;
 }
 
-// 提取并优化列表项，避免每次父组件更新都重绘所有项
 const EpisodeListItem = React.memo(
   ({
     item,
@@ -131,8 +130,6 @@ export function EpisodeListDrawer({ ref }: { ref: React.RefObject<EpisodeListDra
     (episode: MediaItem) => {
       if (episode.id) {
         dismiss();
-        // 核心修复：延迟跳转，等待 Drawer 关闭动画结束
-        // 防止 Native 播放器组件在动画过程中被销毁导致的崩溃
         setTimeout(() => {
           onEpisodeSelect(episode.id);
         }, 350);
