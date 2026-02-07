@@ -11,7 +11,15 @@ export type MediaApi = {
 
 export type MediaServerType = 'jellyfin' | 'emby';
 
-export type MediaItemType = 'Movie' | 'Series' | 'Season' | 'Episode' | 'MusicVideo' | 'Other';
+// 修复：添加 'BoxSet' 类型支持合集
+export type MediaItemType =
+  | 'Movie'
+  | 'Series'
+  | 'Season'
+  | 'Episode'
+  | 'MusicVideo'
+  | 'BoxSet'
+  | 'Other';
 
 export type MediaSortBy =
   | 'DateCreated'
@@ -156,8 +164,6 @@ export interface MediaServerInfo {
   type: MediaServerType;
 }
 
-// 占位的抽象类已下移整合
-
 // Params 类型提取
 export interface DiscoverServersParams {
   host: string;
@@ -188,7 +194,6 @@ export interface GetUserInfoParams {
 }
 
 // Items common
-// 基础可复用片段
 export type WithUserId = { userId: string };
 export type WithLimit = { limit?: number };
 export type WithPaging = { startIndex?: number; limit?: number };
@@ -205,7 +210,6 @@ export type WithFilterOptions = {
   tags?: string[];
 };
 
-// 组合别名（保持原导出名不变）
 export type GetLatestItemsParams = WithUserId & WithLimit & Omit<WithFilterOptions, 'onlyUnplayed'>;
 export type GetLatestItemsByFolderParams = WithUserId & WithFolderId & WithLimit;
 export type GetNextUpItemsParams = WithUserId & WithLimit;
