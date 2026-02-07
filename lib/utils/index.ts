@@ -152,15 +152,18 @@ export const formatBitrate = (
   bps: number | null | undefined,
   options?: { unit?: 'bits' | 'bytes' },
 ): string => {
-  if (!bps || bps <= 0) return '未知';
+  // 如果是0，也应该允许显示 0.00 KB/s，而不是 "未知"
+  if (bps === undefined || bps === null) return '0 KB/s';
 
   // 输入是 bps (bits per second)
   const useBytes = options?.unit === 'bytes';
 
   if (useBytes) {
     // 显示为字节单位 (MB/s, KB/s)
-    const MBps = bps / 8 / 1000000; // bps -> MB/s
-    const KBps = bps / 8 / 1000; // bps -> KB/s
+    // 修正：使用 1024 进制，符合文件传输习惯
+    const Bps = bps / 8;
+    const MBps = Bps / (1024 * 1024);
+    const KBps = Bps / 1024;
 
     if (MBps >= 1) {
       return `${MBps.toFixed(2)} MB/s`;
@@ -168,7 +171,7 @@ export const formatBitrate = (
       return `${KBps.toFixed(2)} KB/s`;
     }
   } else {
-    // 显示为比特单位 (Mbps, Kbps)
+    // 显示为比特单位 (Mbps, Kbps) - 保持 1000 进制 (电信标准)
     const mbps = bps / 1000000; // 转换为 Mbps
     const kbps = bps / 1000; // 转换为 Kbps
 
