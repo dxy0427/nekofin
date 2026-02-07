@@ -46,7 +46,6 @@ export const getSubtitle = (item: MediaItem) => {
   return item.name;
 };
 
-// 比较函数：只在关键数据变化时更新
 const arePropsEqual = (prevProps: any, nextProps: any) => {
   return (
     prevProps.item.id === nextProps.item.id &&
@@ -416,7 +415,7 @@ export const SeriesCard = React.memo(
       </Menu>
     );
   },
-  arePropsEqual // 同样使用自定义比较函数
+  arePropsEqual
 );
 
 const styles = StyleSheet.create({
